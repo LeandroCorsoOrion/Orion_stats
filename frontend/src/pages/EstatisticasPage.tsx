@@ -1,7 +1,7 @@
-// Orion Stats - Statistics Page (Improved UX)
+// Orion Stats - Statistics Page (Fixed)
 
-import { useState, useEffect, useCallback } from 'react';
-import { BarChart3, Download, Loader2, X, Info, ChevronDown, ChevronUp } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { BarChart3, Download, Loader2, X, Info } from 'lucide-react';
 import { getDescriptiveStats, getUniqueValues } from '@/lib/api';
 import { useApp } from '@/lib/context';
 import type { ColumnStats, FilterCondition, StatsResponse } from '@/types';
@@ -17,9 +17,9 @@ export function EstatisticasPage() {
     const [loading, setLoading] = useState(false);
     const [result, setResult] = useState<StatsResponse | null>(null);
     const [filterValues, setFilterValues] = useState<Record<string, (string | number)[]>>({});
-    const [loadingValues, setLoadingValues] = useState<string | null>(null);
-    const [expandedFilters, setExpandedFilters] = useState<string[]>([]);
+    const [loadingValues, setLoadingValues] = useState<Set<string>>(new Set());
     const [showGroupByHelp, setShowGroupByHelp] = useState(false);
+    const initialLoadDone = useRef(false);
 
     const discreteColumns = currentDataset?.columns.filter(
         (c) => c.var_type === 'categorical' || c.var_type === 'discrete'
@@ -29,76 +29,47 @@ export function EstatisticasPage() {
         (c) => c.var_type === 'continuous'
     ) || [];
 
+    // Load filter values once when component mounts
+    useEffect(() => {
+        if (currentDataset && !initialLoadDone.current && discreteColumns.length > 0) {
+            initialLoadDone.current = true;
+            discreteColumns.slice(0, 5).forEach(col => {
+                loadUniqueValuesForColumn(col.col_key);
+            });
+        }
+    }, [currentDataset?.id]);
+
     // Auto-calculate when variables change
     useEffect(() => {
         if (currentDataset && statsVariables.length > 0) {
-            handleCalculate();
+            const timer = setTimeout(() => {
+                calculateStats();
+            }, 300); // Debounce
+            return () => clearTimeout(timer);
         } else {
             setResult(null);
         }
     }, [statsVariables, statsGroupBy, filters, treatMissingAsZero, currentDataset?.id]);
 
-    async function loadUniqueValues(colKey: string) {
-        if (!currentDataset || filterValues[colKey]) {
-            setExpandedFilters(prev =>
-                prev.includes(colKey) ? prev.filter(k => k !== colKey) : [...prev, colKey]
-            );
-            return;
-        }
-        setLoadingValues(colKey);
+    async function loadUniqueValuesForColumn(colKey: string) {
+        if (!currentDataset || filterValues[colKey] || loadingValues.has(colKey)) return;
+
+        setLoadingValues(prev => new Set(prev).add(colKey));
         try {
             const resp = await getUniqueValues(currentDataset.id, colKey);
-            setFilterValues((prev) => ({ ...prev, [colKey]: resp.values }));
-            setExpandedFilters(prev => [...prev, colKey]);
+            setFilterValues(prev => ({ ...prev, [colKey]: resp.values }));
         } catch (e) {
             console.error('Failed to load unique values:', e);
         } finally {
-            setLoadingValues(null);
+            setLoadingValues(prev => {
+                const next = new Set(prev);
+                next.delete(colKey);
+                return next;
+            });
         }
     }
 
-    function toggleFilterValue(colKey: string, value: string | number) {
-        setFilters((prev: FilterCondition[]) => {
-            const existing = prev.find((f) => f.col_key === colKey);
-            if (!existing) {
-                return [...prev, { col_key: colKey, values: [value] }];
-            }
-
-            const hasValue = existing.values.includes(value);
-            const newValues = hasValue
-                ? existing.values.filter((v) => v !== value)
-                : [...existing.values, value];
-
-            if (newValues.length === 0) {
-                return prev.filter((f) => f.col_key !== colKey);
-            }
-
-            return prev.map((f) => f.col_key === colKey ? { ...f, values: newValues } : f);
-        });
-    }
-
-    function isValueSelected(colKey: string, value: string | number) {
-        const filter = filters.find((f) => f.col_key === colKey);
-        return filter?.values.includes(value) || false;
-    }
-
-    function toggleVariable(colKey: string) {
-        setStatsVariables((prev: string[]) =>
-            prev.includes(colKey)
-                ? prev.filter((v) => v !== colKey)
-                : [...prev, colKey]
-        );
-    }
-
-    function toggleGroupBy(colKey: string) {
-        setStatsGroupBy((prev: string[]) =>
-            prev.includes(colKey)
-                ? prev.filter((v) => v !== colKey)
-                : [...prev, colKey]
-        );
-    }
-
-    const handleCalculate = useCallback(async () => {
+    async function calculateStats() {
         if (!currentDataset || statsVariables.length === 0) return;
 
         setLoading(true);
@@ -116,7 +87,38 @@ export function EstatisticasPage() {
         } finally {
             setLoading(false);
         }
-    }, [currentDataset, statsVariables, statsGroupBy, filters, treatMissingAsZero]);
+    }
+
+    function handleFilterChange(colKey: string, selectedValues: (string | number)[]) {
+        if (selectedValues.length === 0) {
+            setFilters(filters.filter(f => f.col_key !== colKey));
+        } else {
+            const existing = filters.find(f => f.col_key === colKey);
+            if (existing) {
+                setFilters(filters.map(f => f.col_key === colKey ? { ...f, values: selectedValues } : f));
+            } else {
+                setFilters([...filters, { col_key: colKey, values: selectedValues }]);
+            }
+        }
+    }
+
+    function toggleVariable(colKey: string) {
+        const isSelected = statsVariables.includes(colKey);
+        if (isSelected) {
+            setStatsVariables(statsVariables.filter(v => v !== colKey));
+        } else {
+            setStatsVariables([...statsVariables, colKey]);
+        }
+    }
+
+    function toggleGroupBy(colKey: string) {
+        const isSelected = statsGroupBy.includes(colKey);
+        if (isSelected) {
+            setStatsGroupBy(statsGroupBy.filter(v => v !== colKey));
+        } else {
+            setStatsGroupBy([...statsGroupBy, colKey]);
+        }
+    }
 
     function exportCSV() {
         if (!result) return;
@@ -169,7 +171,7 @@ export function EstatisticasPage() {
                                     return (
                                         <span
                                             key={vKey}
-                                            className="chip active flex items-center gap-1"
+                                            className="chip active flex items-center gap-1 cursor-pointer"
                                             onClick={() => toggleVariable(vKey)}
                                         >
                                             {col?.name || vKey}
@@ -230,86 +232,66 @@ export function EstatisticasPage() {
 
                     {/* Filters */}
                     <div className="glass-card p-4">
-                        <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center justify-between mb-4">
                             <h3 className="font-semibold">Filtros</h3>
                             {getSelectedCount() > 0 && (
-                                <span className="chip text-xs py-0.5 px-2">{getSelectedCount()} filtros</span>
+                                <button
+                                    className="text-xs text-error hover:underline"
+                                    onClick={() => setFilters([])}
+                                >
+                                    Limpar ({getSelectedCount()})
+                                </button>
                             )}
                         </div>
 
                         {discreteColumns.length === 0 ? (
                             <p className="text-sm text-muted">Nenhuma variável discreta disponível</p>
                         ) : (
-                            <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
-                                {discreteColumns.map((col) => {
-                                    const isExpanded = expandedFilters.includes(col.col_key);
-                                    const selectedInFilter = filters.find(f => f.col_key === col.col_key)?.values.length || 0;
+                            <div className="flex flex-col gap-4 max-h-80 overflow-y-auto">
+                                {discreteColumns.slice(0, 5).map((col) => {
+                                    const values = filterValues[col.col_key];
+                                    const selectedInFilter = filters.find(f => f.col_key === col.col_key)?.values || [];
+                                    const isLoading = loadingValues.has(col.col_key);
 
                                     return (
-                                        <div key={col.col_key} className="border border-[var(--glass-border)] rounded-lg overflow-hidden">
-                                            <button
-                                                className="w-full flex items-center justify-between p-2 text-left text-sm hover:bg-[var(--color-surface)] transition"
-                                                onClick={() => loadUniqueValues(col.col_key)}
-                                            >
-                                                <span className="flex items-center gap-2">
-                                                    {col.name}
-                                                    {selectedInFilter > 0 && (
-                                                        <span className="chip active text-xs py-0 px-2">{selectedInFilter}</span>
-                                                    )}
-                                                </span>
-                                                {loadingValues === col.col_key ? (
-                                                    <Loader2 size={14} className="animate-spin" />
-                                                ) : isExpanded ? (
-                                                    <ChevronUp size={14} />
-                                                ) : (
-                                                    <ChevronDown size={14} />
+                                        <div key={col.col_key}>
+                                            <div className="flex items-center justify-between mb-2">
+                                                <span className="text-sm font-medium">{col.name}</span>
+                                                {selectedInFilter.length > 0 && (
+                                                    <span className="text-xs text-primary">{selectedInFilter.length} selecionados</span>
                                                 )}
-                                            </button>
+                                            </div>
 
-                                            {isExpanded && filterValues[col.col_key] && (
-                                                <div className="max-h-48 overflow-y-auto border-t border-[var(--glass-border)] bg-[rgba(0,0,0,0.2)]">
-                                                    {filterValues[col.col_key].slice(0, 50).map((value) => {
-                                                        const isSelected = isValueSelected(col.col_key, value);
-                                                        return (
-                                                            <label
-                                                                key={String(value)}
-                                                                className={`flex items-center gap-3 px-3 py-2 cursor-pointer transition border-b border-[var(--glass-border)] last:border-b-0 ${isSelected
-                                                                    ? 'bg-[rgba(160,208,255,0.15)]'
-                                                                    : 'hover:bg-[var(--color-surface)]'
-                                                                    }`}
-                                                            >
-                                                                <input
-                                                                    type="checkbox"
-                                                                    checked={isSelected}
-                                                                    onChange={() => toggleFilterValue(col.col_key, value)}
-                                                                    className="w-4 h-4 accent-[var(--color-primary)] flex-shrink-0"
-                                                                />
-                                                                <span className={`text-sm ${isSelected ? 'text-primary font-medium' : ''}`}>
-                                                                    {String(value)}
-                                                                </span>
-                                                            </label>
-                                                        );
-                                                    })}
-                                                    {filterValues[col.col_key].length > 50 && (
-                                                        <div className="px-3 py-2 text-xs text-muted text-center">
-                                                            +{filterValues[col.col_key].length - 50} mais valores
-                                                        </div>
-                                                    )}
+                                            {isLoading || !values ? (
+                                                <div className="flex items-center gap-2 text-xs text-muted">
+                                                    <Loader2 size={12} className="animate-spin" />
+                                                    Carregando...
                                                 </div>
+                                            ) : (
+                                                <select
+                                                    multiple
+                                                    className="w-full bg-[var(--color-surface)] border border-[var(--glass-border)] rounded-lg text-sm focus:border-[var(--color-primary)] focus:outline-none"
+                                                    style={{ height: Math.min(values.length * 28 + 8, 120) }}
+                                                    value={selectedInFilter.map(String)}
+                                                    onChange={(e) => {
+                                                        const selected = Array.from(e.target.selectedOptions, opt => {
+                                                            const original = values.find(v => String(v) === opt.value);
+                                                            return original !== undefined ? original : opt.value;
+                                                        });
+                                                        handleFilterChange(col.col_key, selected);
+                                                    }}
+                                                >
+                                                    {values.slice(0, 30).map((value) => (
+                                                        <option key={String(value)} value={String(value)} className="py-1 px-2">
+                                                            {String(value)}
+                                                        </option>
+                                                    ))}
+                                                </select>
                                             )}
                                         </div>
                                     );
                                 })}
                             </div>
-                        )}
-
-                        {filters.length > 0 && (
-                            <button
-                                className="btn btn-ghost w-full mt-3 text-sm"
-                                onClick={() => setFilters([])}
-                            >
-                                <X size={14} /> Limpar Filtros
-                            </button>
                         )}
                     </div>
 
