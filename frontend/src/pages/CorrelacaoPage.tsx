@@ -305,6 +305,9 @@ export function CorrelacaoPage() {
                                     x: varNames,
                                     y: varNames,
                                     type: 'heatmap',
+                                    text: matrix.map(row => row.map(val => val.toFixed(2))),
+                                    texttemplate: '%{text}',
+                                    textfont: { color: '#ffffff', size: 12 },
                                     colorscale: [
                                         [0, '#f87171'],
                                         [0.25, '#fbbf24'],
