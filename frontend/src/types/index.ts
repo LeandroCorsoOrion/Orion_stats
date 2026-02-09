@@ -60,6 +60,11 @@ export interface StatsRequest {
     variables: string[];
     group_by: string[];
     treat_missing_as_zero: boolean;
+    selected_stats?: string[];
+    run_comparison_tests?: boolean;
+    confidence_level?: number;
+    sort_groups_by?: string;
+    max_groups?: number;
 }
 
 export interface ColumnStats {
@@ -77,12 +82,189 @@ export interface ColumnStats {
     q1?: number;
     q3?: number;
     iqr?: number;
+    sem?: number;
+    cv?: number;
+    range?: number;
+    p5?: number;
+    p10?: number;
+    p90?: number;
+    p95?: number;
+    skewness?: number;
+    kurtosis?: number;
+    ci_lower?: number;
+    ci_upper?: number;
+    sum?: number;
+    missing_pct?: number;
+    group_pct?: number;
+}
+
+export interface GroupSummary {
+    group_key: string;
+    group_labels: Record<string, string>;
+    sample_size: number;
+    pct_of_total: number;
+}
+
+export interface GroupComparisonTest {
+    variable: string;
+    variable_name: string;
+    test_name: string;
+    test_name_display: string;
+    statistic: number;
+    p_value: number;
+    significant: boolean;
+    alpha: number;
+    effect_size?: number;
+    effect_size_name?: string;
+    effect_size_interpretation?: string;
+    interpretation: string;
+    assumptions_met: Record<string, boolean>;
 }
 
 export interface StatsResponse {
     sample_size: number;
     statistics: ColumnStats[];
     grouped_statistics?: Record<string, ColumnStats[]>;
+    group_summaries?: GroupSummary[];
+    group_comparison_tests?: GroupComparisonTest[];
+    group_by_columns?: string[];
+    total_groups?: number;
+}
+
+// ---------- Frequency Types ----------
+
+export interface FrequencyRow {
+    value: string;
+    count: number;
+    percentage: number;
+    cumulative_count: number;
+    cumulative_pct: number;
+}
+
+export interface FrequencyRequest {
+    dataset_id: number;
+    filters: FilterCondition[];
+    variables: string[];
+    max_categories?: number;
+    treat_missing_as_zero?: boolean;
+}
+
+export interface FrequencyResponse {
+    sample_size: number;
+    tables: Record<string, FrequencyRow[]>;
+}
+
+// ---------- Crosstab Types ----------
+
+export interface CrosstabRequest {
+    dataset_id: number;
+    filters: FilterCondition[];
+    row_variable: string;
+    col_variable: string;
+    max_rows?: number;
+    max_cols?: number;
+    treat_missing_as_zero?: boolean;
+}
+
+export interface CrosstabResponse {
+    sample_size: number;
+    row_variable_name: string;
+    col_variable_name: string;
+    row_labels: string[];
+    col_labels: string[];
+    counts: number[][];
+    percentages: number[][];
+    row_totals: number[];
+    col_totals: number[];
+    grand_total: number;
+    chi_square?: number;
+    chi_square_p_value?: number;
+    cramers_v?: number;
+    degrees_of_freedom?: number;
+    interpretation?: string;
+}
+
+// ---------- Normality Types ----------
+
+export interface NormalityTestDetail {
+    test_name: string;
+    statistic: number;
+    p_value: number;
+    is_normal: boolean;
+}
+
+export interface NormalityResult {
+    variable: string;
+    variable_name: string;
+    n: number;
+    tests: NormalityTestDetail[];
+    overall_normal: boolean;
+    skewness: number;
+    kurtosis: number;
+    interpretation: string;
+}
+
+export interface NormalityRequest {
+    dataset_id: number;
+    filters: FilterCondition[];
+    variables: string[];
+    alpha?: number;
+    treat_missing_as_zero?: boolean;
+}
+
+export interface NormalityResponse {
+    sample_size: number;
+    results: NormalityResult[];
+    recommendation: string;
+}
+
+// ---------- Hypothesis Test Types ----------
+
+export interface HypothesisTestRequest {
+    dataset_id: number;
+    filters: FilterCondition[];
+    test_type: string;
+    variable: string;
+    group_variable?: string;
+    paired_variable?: string;
+    test_value?: number;
+    alternative?: string;
+    alpha?: number;
+    treat_missing_as_zero?: boolean;
+}
+
+export interface HypothesisTestResponse {
+    test_name: string;
+    test_type: string;
+    statistic: number;
+    p_value: number;
+    significant: boolean;
+    effect_size?: number;
+    effect_size_name?: string;
+    effect_size_interpretation?: string;
+    ci_lower?: number;
+    ci_upper?: number;
+    decision: string;
+    interpretation: string;
+    groups_summary?: Record<string, unknown>[];
+}
+
+// ---------- Chart Data Types ----------
+
+export interface ChartDataRequest {
+    dataset_id: number;
+    filters: FilterCondition[];
+    variable: string;
+    group_by: string;
+    treat_missing_as_zero?: boolean;
+    max_groups?: number;
+}
+
+export interface ChartDataResponse {
+    variable_name: string;
+    group_variable_name: string;
+    groups: Record<string, number[]>;
+    group_stats: Record<string, Record<string, number>>;
 }
 
 // ---------- Correlation Types ----------
@@ -200,3 +382,23 @@ export interface AppState {
     filters: FilterCondition[];
     treatMissingAsZero: boolean;
 }
+
+// ---------- Activity Log Types ----------
+
+export interface ActivityLog {
+    id: number;
+    action: 'upload' | 'access' | 'delete' | 'update' | 'view';
+    dataset_id?: number;
+    dataset_name?: string;
+    filename?: string;
+    user?: string;
+    ip_address?: string;
+    details?: string;
+    created_at: string;
+}
+
+export interface ActivityLogList {
+    logs: ActivityLog[];
+    total: number;
+}
+

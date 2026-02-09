@@ -162,39 +162,60 @@ def train_linear_regression(
     """
     Train OLS linear regression and extract coefficients using statsmodels.
     """
-    # Prepare data - one-hot encode categorical
-    X_prepared = X.copy()
-    encoded_features = []
-    
-    for col in X.columns:
-        meta = columns_meta.get(col, {})
-        var_type = meta.get('var_type', 'continuous')
-        
-        if var_type == 'categorical':
-            # One-hot encode
-            dummies = pd.get_dummies(X_prepared[col], prefix=col, drop_first=True)
-            X_prepared = X_prepared.drop(columns=[col])
-            X_prepared = pd.concat([X_prepared, dummies], axis=1)
-            encoded_features.extend(dummies.columns.tolist())
-        else:
-            encoded_features.append(col)
-    
-    # Convert to numeric and handle NaN
-    for col in X_prepared.columns:
-        X_prepared[col] = pd.to_numeric(X_prepared[col], errors='coerce').fillna(0)
-    
-    y_clean = y.fillna(0)
-    
-    # Add constant for intercept
-    X_with_const = sm.add_constant(X_prepared)
-    
     try:
+        # Prepare data - one-hot encode categorical
+        X_prepared = X.copy()
+        encoded_features = []
+        
+        for col in list(X_prepared.columns):
+            meta = columns_meta.get(col, {})
+            var_type = meta.get('var_type', 'continuous')
+            
+            if var_type == 'categorical':
+                # One-hot encode
+                dummies = pd.get_dummies(X_prepared[col], prefix=col, drop_first=True)
+                X_prepared = X_prepared.drop(columns=[col])
+                for dcol in dummies.columns:
+                    X_prepared[dcol] = dummies[dcol].astype(float)
+                    encoded_features.append(dcol)
+            else:
+                # Convert to numeric
+                X_prepared[col] = pd.to_numeric(X_prepared[col], errors='coerce')
+                encoded_features.append(col)
+        
+        # Fill NaN values with 0
+        X_prepared = X_prepared.fillna(0)
+        
+        # CRITICAL: Ensure all columns are float64 to avoid numpy casting errors
+        for col in X_prepared.columns:
+            X_prepared[col] = X_prepared[col].astype(np.float64)
+        
+        # Clean target variable
+        y_clean = pd.to_numeric(y, errors='coerce').fillna(0).astype(np.float64)
+        
+        # Remove rows with any remaining invalid values
+        valid_mask = ~(X_prepared.isnull().any(axis=1) | np.isinf(X_prepared).any(axis=1))
+        valid_mask = valid_mask & ~(y_clean.isnull() | np.isinf(y_clean))
+        
+        X_prepared = X_prepared[valid_mask]
+        y_clean = y_clean[valid_mask]
+        
+        if len(X_prepared) < 5:
+            raise ValueError("Not enough valid samples for linear regression")
+        
+        # Add constant for intercept
+        X_with_const = sm.add_constant(X_prepared, has_constant='add')
+        
+        # Ensure const column is also float64
+        if 'const' in X_with_const.columns:
+            X_with_const['const'] = X_with_const['const'].astype(np.float64)
+        
         # Fit OLS model
         model = sm.OLS(y_clean, X_with_const).fit()
         
         # Extract coefficients
         coefficients = []
-        for i, name in enumerate(X_with_const.columns):
+        for name in X_with_const.columns:
             if name == 'const':
                 continue
             
@@ -203,16 +224,30 @@ def train_linear_regression(
             t_val = model.tvalues.get(name, None)
             p_val = model.pvalues.get(name, None)
             
+            # Handle potential infinite or NaN values
+            if not np.isfinite(coef):
+                coef = 0.0
+            if std_err is not None and not np.isfinite(std_err):
+                std_err = None
+            if t_val is not None and not np.isfinite(t_val):
+                t_val = None
+            if p_val is not None and not np.isfinite(p_val):
+                p_val = None
+            
             coefficients.append(LinearCoefficient(
                 feature=name,
                 coefficient=round(float(coef), 6),
-                std_error=round(float(std_err), 6) if std_err else None,
-                t_value=round(float(t_val), 4) if t_val else None,
-                p_value=round(float(p_val), 6) if p_val else None
+                std_error=round(float(std_err), 6) if std_err is not None else None,
+                t_value=round(float(t_val), 4) if t_val is not None else None,
+                p_value=round(float(p_val), 6) if p_val is not None else None
             ))
         
         # Build equation string
-        intercept = round(float(model.params.get('const', 0)), 4)
+        intercept_val = model.params.get('const', 0)
+        if not np.isfinite(intercept_val):
+            intercept_val = 0.0
+        intercept = round(float(intercept_val), 4)
+        
         equation_parts = [f"{intercept}"]
         for coef in coefficients[:5]:  # Limit to first 5 for readability
             sign = "+" if coef.coefficient >= 0 else ""
@@ -225,7 +260,7 @@ def train_linear_regression(
         
         # Calculate metrics
         y_pred = model.predict(X_with_const)
-        r2 = round(float(model.rsquared), 4)
+        r2 = round(float(model.rsquared), 4) if np.isfinite(model.rsquared) else 0.0
         rmse = round(float(np.sqrt(mean_squared_error(y_clean, y_pred))), 4)
         
         return LinearRegressionResult(
@@ -237,9 +272,11 @@ def train_linear_regression(
         )
         
     except Exception as e:
-        # Return empty result on error
+        # Return empty result on error with full error message for debugging
+        error_msg = str(e)[:100]
+        print(f"Linear regression error: {error_msg}")
         return LinearRegressionResult(
-            equation=f"Error: {str(e)[:50]}",
+            equation=f"Erro na regressão: {error_msg}",
             r2=0.0,
             rmse=0.0,
             intercept=0.0,

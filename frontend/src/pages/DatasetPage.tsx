@@ -1,10 +1,10 @@
 // Orion Stats - Dataset Page (Improved UX)
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Upload, FileSpreadsheet, Loader2, CheckCircle, AlertCircle, Trash2, Database, Columns, Eye } from 'lucide-react';
-import { uploadDataset, queryData, getDatasets, deleteDataset, updateColumnType } from '@/lib/api';
+import { Upload, FileSpreadsheet, Loader2, CheckCircle, AlertCircle, Trash2, Database, Columns, Eye, History, Clock, User } from 'lucide-react';
+import { uploadDataset, queryData, getDatasets, deleteDataset, updateColumnType, getDatasetActivityHistory } from '@/lib/api';
 import { useApp } from '@/lib/context';
-import type { DatasetMeta, ColumnMeta } from '@/types';
+import type { DatasetMeta, ColumnMeta, ActivityLog } from '@/types';
 
 export function DatasetPage() {
     const { currentDataset, setCurrentDataset } = useApp();
@@ -15,7 +15,8 @@ export function DatasetPage() {
     const [dragOver, setDragOver] = useState(false);
     const [page, setPage] = useState(0);
     const [totalCount, setTotalCount] = useState(0);
-    const [activeTab, setActiveTab] = useState<'info' | 'preview'>('info');
+    const [activeTab, setActiveTab] = useState<'info' | 'preview' | 'history'>('info');
+    const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const PREVIEW_LIMIT = 50;
 
@@ -28,8 +29,18 @@ export function DatasetPage() {
     useEffect(() => {
         if (currentDataset) {
             loadPreview(currentDataset);
+            loadActivityHistory(currentDataset.id);
         }
     }, [currentDataset?.id]);
+
+    async function loadActivityHistory(datasetId: number) {
+        try {
+            const result = await getDatasetActivityHistory(datasetId, 50);
+            setActivityLogs(result.logs);
+        } catch (e) {
+            console.error('Failed to load activity history:', e);
+        }
+    }
 
     async function loadDatasets() {
         try {
@@ -57,6 +68,9 @@ export function DatasetPage() {
     }
 
     const handleFile = useCallback(async (file: File) => {
+        // Prevent duplicate calls
+        if (uploading) return;
+
         const ext = file.name.toLowerCase().split('.').pop();
         if (ext !== 'xlsx' && ext !== 'xls') {
             setError('Apenas arquivos .xlsx e .xls são permitidos');
@@ -75,11 +89,16 @@ export function DatasetPage() {
             setError(err.response?.data?.detail || 'Falha ao carregar arquivo');
         } finally {
             setUploading(false);
+            // Reset file input to allow selecting the same file again
+            if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+            }
         }
-    }, [setCurrentDataset]);
+    }, [setCurrentDataset, uploading]);
 
     const handleDrop = useCallback((e: React.DragEvent) => {
         e.preventDefault();
+        e.stopPropagation();
         setDragOver(false);
         const file = e.dataTransfer.files[0];
         if (file) handleFile(file);
@@ -87,7 +106,11 @@ export function DatasetPage() {
 
     const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (file) handleFile(file);
+        if (file) {
+            handleFile(file);
+        }
+        // Clear the input value to ensure onChange fires even for the same file
+        e.target.value = '';
     }, [handleFile]);
 
     async function handleSelectDataset(dataset: DatasetMeta) {
@@ -155,6 +178,8 @@ export function DatasetPage() {
                             type="file"
                             accept=".xlsx,.xls"
                             onChange={handleFileInput}
+                            onClick={(e) => e.stopPropagation()}
+                            style={{ display: 'none' }}
                         />
 
                         {uploading ? (
@@ -262,6 +287,12 @@ export function DatasetPage() {
                                 onClick={() => setActiveTab('preview')}
                             >
                                 <Eye size={16} /> Pré-visualização
+                            </button>
+                            <button
+                                className={`btn ${activeTab === 'history' ? 'btn-primary' : 'btn-secondary'}`}
+                                onClick={() => setActiveTab('history')}
+                            >
+                                <History size={16} /> Histórico
                             </button>
                         </div>
 
@@ -377,6 +408,76 @@ export function DatasetPage() {
                                         </tbody>
                                     </table>
                                 </div>
+                            </div>
+                        )}
+
+                        {/* History Tab */}
+                        {activeTab === 'history' && (
+                            <div className="glass-card p-4">
+                                <div className="flex items-center gap-2 mb-4">
+                                    <History size={20} className="text-primary" />
+                                    <h3 className="font-semibold">Histórico de Atividades</h3>
+                                    <span className="text-sm text-muted">({activityLogs.length} registros)</span>
+                                </div>
+
+                                {activityLogs.length === 0 ? (
+                                    <div className="text-center py-8 text-muted">
+                                        <History size={48} className="mx-auto mb-3 opacity-50" />
+                                        <p>Nenhuma atividade registrada para este dataset.</p>
+                                    </div>
+                                ) : (
+                                    <div className="table-container" style={{ maxHeight: '400px' }}>
+                                        <table className="table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Data/Hora</th>
+                                                    <th>Usuário</th>
+                                                    <th>Ação</th>
+                                                    <th>Detalhes</th>
+                                                    <th>IP</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {activityLogs.map((log) => (
+                                                    <tr key={log.id}>
+                                                        <td className="whitespace-nowrap">
+                                                            <div className="flex items-center gap-2">
+                                                                <Clock size={14} className="text-muted" />
+                                                                <span className="text-sm">
+                                                                    {new Date(log.created_at).toLocaleDateString('pt-BR')} {new Date(log.created_at).toLocaleTimeString('pt-BR')}
+                                                                </span>
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            <div className="flex items-center gap-2">
+                                                                <User size={14} className="text-muted" />
+                                                                <span className="text-sm">{log.user || 'anonymous'}</span>
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            <span className={`px-2 py-1 rounded text-xs font-medium ${log.action === 'upload' ? 'bg-[rgba(74,222,128,0.2)] text-success' :
+                                                                log.action === 'access' ? 'bg-[rgba(160,208,255,0.2)] text-primary' :
+                                                                    log.action === 'delete' ? 'bg-[rgba(248,113,113,0.2)] text-error' :
+                                                                        'bg-[rgba(251,191,36,0.2)] text-warning'
+                                                                }`}>
+                                                                {log.action === 'upload' ? 'Upload' :
+                                                                    log.action === 'access' ? 'Acesso' :
+                                                                        log.action === 'delete' ? 'Exclusão' :
+                                                                            log.action === 'update' ? 'Atualização' : log.action}
+                                                            </span>
+                                                        </td>
+                                                        <td className="text-sm text-secondary max-w-xs truncate">
+                                                            {log.details || '-'}
+                                                        </td>
+                                                        <td className="text-xs text-muted">
+                                                            {log.ip_address || '-'}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>

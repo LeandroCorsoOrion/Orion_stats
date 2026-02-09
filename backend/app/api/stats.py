@@ -2,56 +2,255 @@
 Orion Stats - Statistics API Endpoints
 """
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.db.models import Dataset
-from app.schemas.schemas import StatsRequest, StatsResponse
+from app.schemas.schemas import (
+    StatsRequest, StatsResponse,
+    FrequencyRequest, FrequencyResponse,
+    CrosstabRequest, CrosstabResponse,
+    NormalityRequest, NormalityResponse,
+    HypothesisTestRequest, HypothesisTestResponse,
+    ChartDataRequest, ChartDataResponse,
+    ExportRequest,
+)
 from app.services.data_service import get_cached_dataframe
 from app.services.stats_service import calculate_descriptive_stats
 
 router = APIRouter(prefix="/stats", tags=["Statistics"])
 
 
-@router.post("/descriptive", response_model=StatsResponse)
-def get_descriptive_stats(request: StatsRequest, db: Session = Depends(get_db)):
-    """
-    Calculate descriptive statistics for selected variables.
-    
-    Returns: mean, median, mode, std, variance, min, max, Q1, Q3, IQR,
-             count, missing count per variable.
-    
-    Optionally groups by discrete variables.
-    """
-    # Get dataset
-    dataset = db.query(Dataset).filter(Dataset.id == request.dataset_id).first()
+def _load_dataset(db: Session, dataset_id: int):
+    """Load dataset and dataframe."""
+    dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
-    
+    df = get_cached_dataframe(dataset.id, dataset.parquet_path)
+    columns_meta = {col['col_key']: col['name'] for col in dataset.columns_meta}
+    return dataset, df, columns_meta
+
+
+@router.post("/descriptive", response_model=StatsResponse)
+def get_descriptive_stats(request: StatsRequest, db: Session = Depends(get_db)):
+    """Calculate descriptive statistics with optional grouping and comparison tests."""
+    dataset, df, columns_meta = _load_dataset(db, request.dataset_id)
+
     if not request.variables:
         raise HTTPException(status_code=400, detail="No variables selected")
-    
-    # Load data
-    df = get_cached_dataframe(dataset.id, dataset.parquet_path)
-    
-    # Create column mapping
-    columns_meta = {col['col_key']: col['name'] for col in dataset.columns_meta}
-    
-    # Calculate statistics
+
     try:
-        sample_size, statistics, grouped_stats = calculate_descriptive_stats(
+        sample_size, statistics, grouped_stats, group_summaries, comparison_tests, total_groups = calculate_descriptive_stats(
             df=df,
             variables=request.variables,
             columns_meta=columns_meta,
-            filters=request.filters,
+            filters=request.filters if request.filters else None,
             group_by=request.group_by if request.group_by else None,
-            treat_missing_as_zero=request.treat_missing_as_zero
+            treat_missing_as_zero=request.treat_missing_as_zero,
+            confidence_level=request.confidence_level,
+            run_comparison_tests=request.run_comparison_tests,
+            sort_groups_by=request.sort_groups_by,
+            max_groups=request.max_groups,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error calculating statistics: {str(e)}")
-    
+
     return StatsResponse(
         sample_size=sample_size,
         statistics=statistics,
-        grouped_statistics=grouped_stats
+        grouped_statistics=grouped_stats,
+        group_summaries=group_summaries,
+        group_comparison_tests=comparison_tests,
+        group_by_columns=request.group_by if request.group_by else None,
+        total_groups=total_groups,
+    )
+
+
+@router.post("/frequencies", response_model=FrequencyResponse)
+def get_frequencies(request: FrequencyRequest, db: Session = Depends(get_db)):
+    """Calculate frequency tables for selected variables."""
+    from app.services.frequency_service import calculate_frequencies
+
+    dataset, df, columns_meta = _load_dataset(db, request.dataset_id)
+
+    if not request.variables:
+        raise HTTPException(status_code=400, detail="No variables selected")
+
+    try:
+        result = calculate_frequencies(
+            df=df,
+            variables=request.variables,
+            columns_meta=columns_meta,
+            filters=request.filters if request.filters else None,
+            max_categories=request.max_categories,
+            treat_missing_as_zero=request.treat_missing_as_zero,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error calculating frequencies: {str(e)}")
+
+    return result
+
+
+@router.post("/crosstabs", response_model=CrosstabResponse)
+def get_crosstabs(request: CrosstabRequest, db: Session = Depends(get_db)):
+    """Calculate cross-tabulation with chi-square test."""
+    from app.services.crosstab_service import calculate_crosstab
+
+    dataset, df, columns_meta = _load_dataset(db, request.dataset_id)
+
+    try:
+        result = calculate_crosstab(
+            df=df,
+            row_variable=request.row_variable,
+            col_variable=request.col_variable,
+            columns_meta=columns_meta,
+            filters=request.filters if request.filters else None,
+            max_rows=request.max_rows,
+            max_cols=request.max_cols,
+            treat_missing_as_zero=request.treat_missing_as_zero,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error calculating crosstab: {str(e)}")
+
+    return result
+
+
+@router.post("/normality", response_model=NormalityResponse)
+def get_normality(request: NormalityRequest, db: Session = Depends(get_db)):
+    """Run normality tests for selected variables."""
+    from app.services.normality_service import test_normality
+
+    dataset, df, columns_meta = _load_dataset(db, request.dataset_id)
+
+    if not request.variables:
+        raise HTTPException(status_code=400, detail="No variables selected")
+
+    try:
+        result = test_normality(
+            df=df,
+            variables=request.variables,
+            columns_meta=columns_meta,
+            filters=request.filters if request.filters else None,
+            alpha=request.alpha,
+            treat_missing_as_zero=request.treat_missing_as_zero,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error testing normality: {str(e)}")
+
+    return result
+
+
+@router.post("/hypothesis-test", response_model=HypothesisTestResponse)
+def run_hypothesis_test(request: HypothesisTestRequest, db: Session = Depends(get_db)):
+    """Run a hypothesis test."""
+    from app.services.hypothesis_service import run_hypothesis_test as _run_test
+
+    dataset, df, columns_meta = _load_dataset(db, request.dataset_id)
+
+    try:
+        result = _run_test(
+            df=df,
+            test_type=request.test_type,
+            variable=request.variable,
+            columns_meta=columns_meta,
+            filters=request.filters if request.filters else None,
+            group_variable=request.group_variable,
+            paired_variable=request.paired_variable,
+            test_value=request.test_value,
+            alternative=request.alternative,
+            alpha=request.alpha,
+            treat_missing_as_zero=request.treat_missing_as_zero,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error running hypothesis test: {str(e)}")
+
+    return result
+
+
+@router.post("/chart-data", response_model=ChartDataResponse)
+def get_chart_data(request: ChartDataRequest, db: Session = Depends(get_db)):
+    """Get raw grouped data for charting."""
+    from app.services.data_service import apply_filters
+    import pandas as pd
+    import numpy as np
+    from scipy import stats as scipy_stats
+
+    dataset, df, columns_meta = _load_dataset(db, request.dataset_id)
+
+    if request.filters:
+        df = apply_filters(df, request.filters)
+
+    if request.variable not in df.columns or request.group_by not in df.columns:
+        raise HTTPException(status_code=400, detail="Variable or group column not found")
+
+    groups_dict = {}
+    group_stats_dict = {}
+
+    grouped = df.groupby(request.group_by)
+    count = 0
+    for name, group_df in grouped:
+        if count >= request.max_groups:
+            break
+        key = str(name)
+        series = pd.to_numeric(group_df[request.variable], errors='coerce')
+        if request.treat_missing_as_zero:
+            series = series.fillna(0)
+        else:
+            series = series.dropna()
+
+        values = series.tolist()
+        groups_dict[key] = values
+
+        if len(values) > 0:
+            m = float(np.mean(values))
+            s = float(np.std(values, ddof=1)) if len(values) > 1 else 0
+            n = len(values)
+            sem = s / np.sqrt(n) if n > 0 else 0
+            t_crit = scipy_stats.t.ppf(0.975, df=n - 1) if n > 1 else 0
+            group_stats_dict[key] = {
+                "mean": round(m, 4),
+                "median": round(float(np.median(values)), 4),
+                "std": round(s, 4),
+                "ci_lower": round(m - t_crit * sem, 4),
+                "ci_upper": round(m + t_crit * sem, 4),
+                "count": n,
+            }
+        count += 1
+
+    return ChartDataResponse(
+        variable_name=columns_meta.get(request.variable, request.variable),
+        group_variable_name=columns_meta.get(request.group_by, request.group_by),
+        groups=groups_dict,
+        group_stats=group_stats_dict,
+    )
+
+
+@router.post("/export-excel")
+def export_excel(request: ExportRequest, db: Session = Depends(get_db)):
+    """Export statistics to Excel file."""
+    from app.services.export_service import create_excel_export
+
+    dataset, df, columns_meta = _load_dataset(db, request.dataset_id)
+
+    if not request.variables:
+        raise HTTPException(status_code=400, detail="No variables selected")
+
+    try:
+        buffer = create_excel_export(
+            df=df,
+            variables=request.variables,
+            columns_meta=columns_meta,
+            filters=request.filters if request.filters else None,
+            group_by=request.group_by if request.group_by else None,
+            treat_missing_as_zero=request.treat_missing_as_zero,
+            include_sheets=request.include_sheets,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error creating export: {str(e)}")
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename=estatisticas_{dataset.name}.xlsx"},
     )

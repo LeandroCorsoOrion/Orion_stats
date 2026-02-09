@@ -15,6 +15,7 @@ from app.api.stats import router as stats_router
 from app.api.correlation import router as correlation_router
 from app.api.ml import router as ml_router
 from app.api.scenarios import router as scenarios_router
+from app.api.activity import router as activity_router
 
 
 @asynccontextmanager
@@ -55,6 +56,7 @@ app.include_router(stats_router)
 app.include_router(correlation_router)
 app.include_router(ml_router)
 app.include_router(scenarios_router)
+app.include_router(activity_router)
 
 
 @app.get("/")

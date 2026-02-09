@@ -6,7 +6,7 @@ import shutil
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, Request
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -17,12 +17,22 @@ from app.services.data_service import (
     load_xlsx, save_parquet, analyze_columns, 
     rename_columns_to_keys, clear_cache
 )
+from app.services.activity_service import log_activity
 
 router = APIRouter(prefix="/datasets", tags=["Datasets"])
 
 
+def get_client_info(request: Request) -> tuple[str, str]:
+    """Extract client IP and user from request."""
+    ip = request.client.host if request.client else "unknown"
+    # Get user from header or query param (can be extended for auth)
+    user = request.headers.get("X-User", request.query_params.get("user", "anonymous"))
+    return ip, user
+
+
 @router.post("/upload", response_model=DatasetCreate)
 async def upload_dataset(
+    request: Request,
     file: UploadFile = File(...),
     name: str = Query(None, description="Dataset name (defaults to filename)"),
     db: Session = Depends(get_db)
@@ -89,6 +99,19 @@ async def upload_dataset(
         db_dataset.parquet_path = str(parquet_path)
         db.commit()
         
+        # Log upload activity
+        ip, user = get_client_info(request)
+        log_activity(
+            db=db,
+            action="upload",
+            dataset_id=db_dataset.id,
+            dataset_name=db_dataset.name,
+            filename=db_dataset.original_filename,
+            user=user,
+            ip_address=ip,
+            details=f"Uploaded {db_dataset.row_count} rows x {db_dataset.col_count} columns"
+        )
+        
         return DatasetCreate(
             id=db_dataset.id,
             name=db_dataset.name,
@@ -113,11 +136,24 @@ async def upload_dataset(
 
 
 @router.get("/{dataset_id}/meta", response_model=DatasetMeta)
-def get_dataset_meta(dataset_id: int, db: Session = Depends(get_db)):
+def get_dataset_meta(request: Request, dataset_id: int, db: Session = Depends(get_db)):
     """Get dataset metadata."""
     dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
+    
+    # Log access activity
+    ip, user = get_client_info(request)
+    log_activity(
+        db=db,
+        action="access",
+        dataset_id=dataset.id,
+        dataset_name=dataset.name,
+        filename=dataset.original_filename,
+        user=user,
+        ip_address=ip,
+        details="Accessed dataset metadata"
+    )
     
     columns = [ColumnMeta(**col) for col in dataset.columns_meta]
     
@@ -190,11 +226,28 @@ def update_column_type(
 
 
 @router.delete("/{dataset_id}")
-def delete_dataset(dataset_id: int, db: Session = Depends(get_db)):
+def delete_dataset(request: Request, dataset_id: int, db: Session = Depends(get_db)):
     """Delete a dataset and its data files."""
     dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
+    
+    # Store info for logging before deletion
+    dataset_name = dataset.name
+    filename = dataset.original_filename
+    
+    # Log delete activity before deletion
+    ip, user = get_client_info(request)
+    log_activity(
+        db=db,
+        action="delete",
+        dataset_id=None,  # Will be null since dataset is being deleted
+        dataset_name=dataset_name,
+        filename=filename,
+        user=user,
+        ip_address=ip,
+        details=f"Deleted dataset ID {dataset_id}"
+    )
     
     # Delete parquet file
     try:
@@ -211,3 +264,4 @@ def delete_dataset(dataset_id: int, db: Session = Depends(get_db)):
     db.commit()
     
     return {"message": "Dataset deleted", "id": dataset_id}
+

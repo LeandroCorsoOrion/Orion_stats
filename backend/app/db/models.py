@@ -40,3 +40,18 @@ class Scenario(Base):
     
     # Relationships
     dataset = relationship("Dataset", back_populates="scenarios")
+
+
+class ActivityLog(Base):
+    """Activity log model for tracking all user actions."""
+    __tablename__ = "activity_logs"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    action = Column(String(50), nullable=False)  # 'upload', 'access', 'delete', 'update'
+    dataset_id = Column(Integer, ForeignKey("datasets.id", ondelete="SET NULL"), nullable=True)
+    dataset_name = Column(String(255), nullable=True)  # Store name for when dataset is deleted
+    filename = Column(String(255), nullable=True)
+    user = Column(String(255), nullable=True, default="anonymous")  # User who performed the action
+    ip_address = Column(String(50), nullable=True)  # Client IP address
+    details = Column(Text, nullable=True)  # Additional details about the action
+    created_at = Column(DateTime, default=datetime.utcnow)

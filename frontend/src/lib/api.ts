@@ -18,6 +18,17 @@ import type {
     ScenarioCreate,
     Scenario,
     ScenarioList,
+    ActivityLogList,
+    FrequencyRequest,
+    FrequencyResponse,
+    CrosstabRequest,
+    CrosstabResponse,
+    NormalityRequest,
+    NormalityResponse,
+    HypothesisTestRequest,
+    HypothesisTestResponse,
+    ChartDataRequest,
+    ChartDataResponse,
 } from '@/types';
 
 // Create axios instance
@@ -92,6 +103,36 @@ export async function getUniqueValues(
 
 export async function getDescriptiveStats(request: StatsRequest): Promise<StatsResponse> {
     const response = await api.post<StatsResponse>('/stats/descriptive', request);
+    return response.data;
+}
+
+export async function getFrequencies(request: FrequencyRequest): Promise<FrequencyResponse> {
+    const response = await api.post<FrequencyResponse>('/stats/frequencies', request);
+    return response.data;
+}
+
+export async function getCrosstab(request: CrosstabRequest): Promise<CrosstabResponse> {
+    const response = await api.post<CrosstabResponse>('/stats/crosstabs', request);
+    return response.data;
+}
+
+export async function getNormality(request: NormalityRequest): Promise<NormalityResponse> {
+    const response = await api.post<NormalityResponse>('/stats/normality', request);
+    return response.data;
+}
+
+export async function getHypothesisTest(request: HypothesisTestRequest): Promise<HypothesisTestResponse> {
+    const response = await api.post<HypothesisTestResponse>('/stats/hypothesis-test', request);
+    return response.data;
+}
+
+export async function getChartData(request: ChartDataRequest): Promise<ChartDataResponse> {
+    const response = await api.post<ChartDataResponse>('/stats/chart-data', request);
+    return response.data;
+}
+
+export async function exportStatsExcel(request: object): Promise<Blob> {
+    const response = await api.post('/stats/export-excel', request, { responseType: 'blob' });
     return response.data;
 }
 
@@ -170,4 +211,31 @@ export async function importScenario(data: object): Promise<Scenario> {
     return response.data;
 }
 
+// ---------- Activity Logs API ----------
+
+export async function getActivityLogs(
+    limit: number = 100,
+    offset: number = 0,
+    datasetId?: number,
+    action?: string
+): Promise<ActivityLogList> {
+    const params = new URLSearchParams();
+    params.append('limit', limit.toString());
+    params.append('offset', offset.toString());
+    if (datasetId !== undefined) params.append('dataset_id', datasetId.toString());
+    if (action) params.append('action', action);
+
+    const response = await api.get<ActivityLogList>(`/activity/?${params.toString()}`);
+    return response.data;
+}
+
+export async function getDatasetActivityHistory(
+    datasetId: number,
+    limit: number = 50
+): Promise<ActivityLogList> {
+    const response = await api.get<ActivityLogList>(`/activity/dataset/${datasetId}?limit=${limit}`);
+    return response.data;
+}
+
 export default api;
+

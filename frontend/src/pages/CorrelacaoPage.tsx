@@ -305,28 +305,33 @@ export function CorrelacaoPage() {
                                     x: varNames,
                                     y: varNames,
                                     type: 'heatmap',
-                                    text: matrix.map(row => row.map(val => val.toFixed(2))),
-                                    texttemplate: '%{text}',
-                                    textfont: { color: '#ffffff', size: 12 },
+                                    hoverongaps: false,
                                     colorscale: [
-                                        [0, '#f87171'],
-                                        [0.25, '#fbbf24'],
-                                        [0.5, '#1e293b'],
-                                        [0.75, '#22d3ee'],
-                                        [1, '#4ade80']
+                                        [0, '#dc2626'],      // -1: Vermelho forte
+                                        [0.25, '#f87171'],   // -0.5: Vermelho claro
+                                        [0.5, '#f8fafc'],    // 0: Branco/Neutro
+                                        [0.75, '#60a5fa'],   // 0.5: Azul claro
+                                        [1, '#2563eb']       // 1: Azul forte
                                     ],
                                     zmin: -1,
                                     zmax: 1,
-                                    hovertemplate: '%{x} × %{y}<br>Correlação: %{z:.2f}<extra></extra>',
+                                    hovertemplate: '<b>%{x}</b> × <b>%{y}</b><br>Correlação: <b>%{z:.3f}</b><extra></extra>',
                                     showscale: true,
                                     colorbar: {
-                                        title: { text: 'Correlação', font: { color: '#e8f0f9' } },
-                                        tickfont: { color: '#8ba3c0' },
+                                        title: {
+                                            text: 'Correlação',
+                                            font: { color: '#e8f0f9', size: 12 }
+                                        },
+                                        tickfont: { color: '#8ba3c0', size: 11 },
+                                        tickvals: [-1, -0.5, 0, 0.5, 1],
+                                        ticktext: ['-1', '-0.5', '0', '0.5', '1'],
+                                        len: 0.8,
+                                        thickness: 15,
                                     }
                                 } as Plotly.Data]}
                                 layout={{
-                                    width: 700,
-                                    height: 600,
+                                    width: Math.max(500, varNames.length * 60 + 200),
+                                    height: Math.max(450, varNames.length * 50 + 150),
                                     paper_bgcolor: 'transparent',
                                     plot_bgcolor: 'transparent',
                                     font: {
@@ -336,32 +341,48 @@ export function CorrelacaoPage() {
                                     xaxis: {
                                         tickangle: -45,
                                         tickfont: { size: 10, color: '#8ba3c0' },
-                                        side: 'bottom'
+                                        side: 'bottom',
+                                        showgrid: false,
                                     },
                                     yaxis: {
                                         tickfont: { size: 10, color: '#8ba3c0' },
-                                        autorange: 'reversed'
+                                        autorange: 'reversed',
+                                        showgrid: false,
                                     },
-                                    margin: { l: 120, r: 80, t: 30, b: 120 }
+                                    margin: { l: 130, r: 100, t: 30, b: 130 },
+                                    annotations: matrix.flatMap((row, i) =>
+                                        row.map((val, j) => ({
+                                            x: varNames[j],
+                                            y: varNames[i],
+                                            text: val.toFixed(2),
+                                            font: {
+                                                size: 10,
+                                                color: Math.abs(val) > 0.4 ? '#ffffff' : '#1e293b'
+                                            },
+                                            showarrow: false,
+                                        }))
+                                    ),
                                 }}
                                 config={{
-                                    displayModeBar: false,
+                                    displayModeBar: true,
+                                    modeBarButtonsToRemove: ['lasso2d', 'select2d'],
                                     responsive: true,
+                                    displaylogo: false,
                                 }}
                             />
 
                             {/* Legend */}
                             <div className="flex items-center justify-center gap-6 mt-4 text-xs">
                                 <div className="flex items-center gap-2">
-                                    <div className="w-4 h-4 rounded" style={{ backgroundColor: '#f87171' }}></div>
+                                    <div className="w-4 h-4 rounded" style={{ backgroundColor: '#dc2626' }}></div>
                                     <span className="text-muted">-1 (Negativa Forte)</span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <div className="w-4 h-4 rounded" style={{ backgroundColor: '#1e293b' }}></div>
+                                    <div className="w-4 h-4 rounded border border-[var(--color-surface-border)]" style={{ backgroundColor: '#f8fafc' }}></div>
                                     <span className="text-muted">0 (Sem Correlação)</span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <div className="w-4 h-4 rounded" style={{ backgroundColor: '#4ade80' }}></div>
+                                    <div className="w-4 h-4 rounded" style={{ backgroundColor: '#2563eb' }}></div>
                                     <span className="text-muted">+1 (Positiva Forte)</span>
                                 </div>
                             </div>
