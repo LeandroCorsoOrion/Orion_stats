@@ -14,6 +14,51 @@ from app.schemas.schemas import (
 from app.services.data_service import apply_filters
 
 
+def _normalize_group_value(value):
+    """
+    Normalize categorical labels used for grouping.
+    Keeps numeric/date values unchanged and trims noisy whitespace in strings.
+    """
+    if pd.isna(value):
+        return value
+    if isinstance(value, str):
+        cleaned = " ".join(value.split())
+        return cleaned if cleaned else np.nan
+    return value
+
+
+def normalize_group_columns(df: pd.DataFrame, group_cols: list[str]) -> pd.DataFrame:
+    """
+    Return a copy of dataframe with normalized textual group columns.
+    This avoids splitting the same category into different groups due to whitespace.
+    """
+    if not group_cols:
+        return df
+
+    normalized = df.copy()
+    for col in group_cols:
+        if col not in normalized.columns:
+            continue
+        series = normalized[col]
+        if (
+            pd.api.types.is_object_dtype(series)
+            or pd.api.types.is_string_dtype(series)
+            or pd.api.types.is_categorical_dtype(series)
+        ):
+            normalized[col] = series.map(_normalize_group_value)
+    return normalized
+
+
+def _safe_group_mean_for_sort(group_df: pd.DataFrame, variable: str) -> float:
+    """Numeric-safe group mean used only for sorting groups."""
+    if variable not in group_df.columns:
+        return float("-inf")
+    numeric = pd.to_numeric(group_df[variable], errors="coerce")
+    if numeric.notna().sum() == 0:
+        return float("-inf")
+    return float(numeric.mean())
+
+
 def calculate_column_stats(
     series: pd.Series,
     col_key: str,
@@ -144,7 +189,8 @@ def compare_groups(
     if group_by_col not in df.columns:
         return results
 
-    groups = df.groupby(group_by_col)
+    normalized_df = normalize_group_columns(df, [group_by_col])
+    groups = normalized_df.groupby(group_by_col)
     group_keys = list(groups.groups.keys())
 
     if len(group_keys) < 2:
@@ -358,17 +404,17 @@ def calculate_descriptive_stats(
         if valid_group_by:
             grouped_stats = {}
             group_summaries = []
-
-            groups = list(df.groupby(valid_group_by))
+            grouped_df = normalize_group_columns(df, valid_group_by)
+            groups = list(grouped_df.groupby(valid_group_by))
             total_groups = len(groups)
 
             # Sort groups
             if sort_groups_by == "count":
                 groups.sort(key=lambda x: len(x[1]), reverse=True)
             elif sort_groups_by == "mean_asc" and variables:
-                groups.sort(key=lambda x: x[1][variables[0]].mean() if variables[0] in x[1].columns else 0)
+                groups.sort(key=lambda x: _safe_group_mean_for_sort(x[1], variables[0]))
             elif sort_groups_by == "mean_desc" and variables:
-                groups.sort(key=lambda x: x[1][variables[0]].mean() if variables[0] in x[1].columns else 0, reverse=True)
+                groups.sort(key=lambda x: _safe_group_mean_for_sort(x[1], variables[0]), reverse=True)
             # default: sorted by name (groupby already does this)
 
             # Limit groups
@@ -405,7 +451,7 @@ def calculate_descriptive_stats(
             # Comparison tests
             if run_comparison_tests and len(valid_group_by) == 1 and total_groups >= 2:
                 comparison_tests = compare_groups(
-                    df, variables, valid_group_by[0],
+                    grouped_df, variables, valid_group_by[0],
                     columns_meta, alpha=0.05,
                     treat_missing_as_zero=treat_missing_as_zero,
                 )

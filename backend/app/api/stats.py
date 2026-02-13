@@ -17,7 +17,7 @@ from app.schemas.schemas import (
     ExportRequest,
 )
 from app.services.data_service import get_cached_dataframe
-from app.services.stats_service import calculate_descriptive_stats
+from app.services.stats_service import calculate_descriptive_stats, normalize_group_columns
 
 router = APIRouter(prefix="/stats", tags=["Statistics"])
 
@@ -187,7 +187,8 @@ def get_chart_data(request: ChartDataRequest, db: Session = Depends(get_db)):
     groups_dict = {}
     group_stats_dict = {}
 
-    grouped = df.groupby(request.group_by)
+    grouped_df = normalize_group_columns(df, [request.group_by])
+    grouped = grouped_df.groupby(request.group_by)
     count = 0
     for name, group_df in grouped:
         if count >= request.max_groups:
@@ -203,15 +204,42 @@ def get_chart_data(request: ChartDataRequest, db: Session = Depends(get_db)):
         groups_dict[key] = values
 
         if len(values) > 0:
-            m = float(np.mean(values))
-            s = float(np.std(values, ddof=1)) if len(values) > 1 else 0
             n = len(values)
-            sem = s / np.sqrt(n) if n > 0 else 0
-            t_crit = scipy_stats.t.ppf(0.975, df=n - 1) if n > 1 else 0
+            arr = np.array(values, dtype=float)
+            m = float(np.mean(arr))
+            med = float(np.median(arr))
+            s = float(np.std(arr, ddof=1)) if n > 1 else 0.0
+            var = float(np.var(arr, ddof=1)) if n > 1 else 0.0
+            min_v = float(np.min(arr))
+            max_v = float(np.max(arr))
+            range_v = max_v - min_v
+            q1 = float(np.percentile(arr, 25))
+            q3 = float(np.percentile(arr, 75))
+            iqr = q3 - q1
+            p5 = float(np.percentile(arr, 5))
+            p10 = float(np.percentile(arr, 10))
+            p90 = float(np.percentile(arr, 90))
+            p95 = float(np.percentile(arr, 95))
+            sem = s / np.sqrt(n) if n > 0 else 0.0
+            t_crit = scipy_stats.t.ppf(0.975, df=n - 1) if n > 1 else 0.0
+            cv = (s / m * 100) if m != 0 else None
             group_stats_dict[key] = {
                 "mean": round(m, 4),
-                "median": round(float(np.median(values)), 4),
+                "median": round(med, 4),
                 "std": round(s, 4),
+                "variance": round(var, 4),
+                "sem": round(sem, 4),
+                "cv": round(cv, 4) if cv is not None else None,
+                "min": round(min_v, 4),
+                "max": round(max_v, 4),
+                "range": round(range_v, 4),
+                "q1": round(q1, 4),
+                "q3": round(q3, 4),
+                "iqr": round(iqr, 4),
+                "p5": round(p5, 4),
+                "p10": round(p10, 4),
+                "p90": round(p90, 4),
+                "p95": round(p95, 4),
                 "ci_lower": round(m - t_crit * sem, 4),
                 "ci_upper": round(m + t_crit * sem, 4),
                 "count": n,

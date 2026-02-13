@@ -9,7 +9,14 @@ interface TopbarProps {
 export function Topbar({ datasetName }: TopbarProps) {
     return (
         <header className="topbar">
-            <h1 className="topbar-title">Orion Stats</h1>
+            <div className="topbar-brand">
+                <img
+                    src="/orion-wordmark-only.png"
+                    alt="ORION"
+                    className="orion-wordmark orion-wordmark-topbar"
+                    loading="eager"
+                />
+            </div>
 
             {datasetName && (
                 <div className="topbar-dataset">

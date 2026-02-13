@@ -1,12 +1,13 @@
-import { Table2, BarChart3, BoxSelect, Waves } from 'lucide-react';
+import { Table2, BarChart3, BoxSelect, Waves, LayoutDashboard } from 'lucide-react';
 
-export type ChartView = 'table' | 'boxplot' | 'bar' | 'violin';
+export type ChartView = 'table' | 'boxplot' | 'bar' | 'violin' | 'report';
 
 const VIEWS: { id: ChartView; label: string; icon: typeof Table2 }[] = [
     { id: 'table', label: 'Tabela', icon: Table2 },
     { id: 'boxplot', label: 'Boxplot', icon: BoxSelect },
     { id: 'bar', label: 'Barras', icon: BarChart3 },
     { id: 'violin', label: 'Violin', icon: Waves },
+    { id: 'report', label: 'Relatorio', icon: LayoutDashboard },
 ];
 
 interface Props {

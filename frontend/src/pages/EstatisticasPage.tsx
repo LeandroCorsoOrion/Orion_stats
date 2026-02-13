@@ -1,11 +1,11 @@
 // Orion Stats - Statistics Page (Full Evolution)
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { BarChart3, Download, Loader2, X, FileSpreadsheet } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { BarChart3, Download, Loader2, X, FileSpreadsheet, Save, Play, Trash2 } from 'lucide-react';
 import { getDescriptiveStats, getUniqueValues, getChartData, exportStatsExcel } from '@/lib/api';
 import { useApp } from '@/lib/context';
 import { STAT_TOOLTIPS, STAT_PRESETS } from '@/lib/statTooltips';
-import type { ColumnStats, StatsResponse, ChartDataResponse } from '@/types';
+import type { ColumnStats, StatsResponse, ChartDataResponse, FilterCondition } from '@/types';
 
 import { StatsTabNav } from '@/components/stats/StatsTabNav';
 import { StatSelectorPanel } from '@/components/stats/StatSelectorPanel';
@@ -19,6 +19,22 @@ import { ChartViewToggle, type ChartView } from '@/components/stats/charts/Chart
 import { GroupBoxplot } from '@/components/stats/charts/GroupBoxplot';
 import { GroupBarChart } from '@/components/stats/charts/GroupBarChart';
 import { GroupViolinPlot } from '@/components/stats/charts/GroupViolinPlot';
+import { GroupAutomatedReport } from '@/components/stats/GroupAutomatedReport';
+
+interface SavedDescriptiveAnalysis {
+    id: string;
+    createdAt: string;
+    datasetId: number;
+    result: StatsResponse;
+    config: {
+        filters: FilterCondition[];
+        variables: string[];
+        groupBy: string[];
+        selectedStats: string[];
+        runComparisonTests: boolean;
+        treatMissingAsZero: boolean;
+    };
+}
 
 export function EstatisticasPage() {
     const {
@@ -43,6 +59,7 @@ export function EstatisticasPage() {
     const [chartVariable, setChartVariable] = useState('');
     const [loadingChart, setLoadingChart] = useState(false);
     const [exportingExcel, setExportingExcel] = useState(false);
+    const [savedAnalyses, setSavedAnalyses] = useState<SavedDescriptiveAnalysis[]>([]);
 
     const discreteColumns = currentDataset?.columns.filter(
         (c) => c.var_type === 'categorical' || c.var_type === 'discrete'
@@ -60,6 +77,10 @@ export function EstatisticasPage() {
                 loadUniqueValuesForColumn(col.col_key);
             });
         }
+    }, [currentDataset?.id]);
+
+    useEffect(() => {
+        setSavedAnalyses([]);
     }, [currentDataset?.id]);
 
     // Auto-calculate when variables change
@@ -140,6 +161,14 @@ export function EstatisticasPage() {
         if (!currentDataset) return;
         setExportingExcel(true);
         try {
+            const includeSheets = ['executive', 'descriptive'];
+            if (statsGroupBy.length > 0) {
+                includeSheets.push('grouped', 'group_report', 'group_matrix', 'group_ranking');
+                if (runComparisonTests) {
+                    includeSheets.push('comparison');
+                }
+            }
+
             const blob = await exportStatsExcel({
                 dataset_id: currentDataset.id,
                 filters,
@@ -148,11 +177,12 @@ export function EstatisticasPage() {
                 treat_missing_as_zero: treatMissingAsZero,
                 selected_stats: selectedStats,
                 run_comparison_tests: runComparisonTests,
+                include_sheets: includeSheets,
             });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `estatisticas_${currentDataset.name}.xlsx`;
+            a.download = `relatorio_estatistico_${currentDataset.name}.xlsx`;
             a.click();
             URL.revokeObjectURL(url);
         } catch (e) {
@@ -216,8 +246,64 @@ export function EstatisticasPage() {
         return filters.reduce((acc, f) => acc + f.values.length, 0);
     }
 
+    function getColumnDisplayName(colKey: string) {
+        const col = currentDataset?.columns.find(c => c.col_key === colKey);
+        return col?.name || colKey;
+    }
+
+    function formatColumnList(colKeys: string[], maxItems = 3) {
+        const labels = colKeys.map(getColumnDisplayName);
+        if (labels.length <= maxItems) return labels.join(', ');
+        return `${labels.slice(0, maxItems).join(', ')} +${labels.length - maxItems}`;
+    }
+
+    function getGroupMean(groupKey: string, variableKey: string): number | null {
+        if (!result?.grouped_statistics) return null;
+        const groupStats = result.grouped_statistics[groupKey];
+        if (!groupStats) return null;
+        const variableStats = groupStats.find(s => s.col_key === variableKey);
+        return typeof variableStats?.mean === 'number' ? variableStats.mean : null;
+    }
+
+    function saveCurrentAnalysis() {
+        if (!currentDataset || !result) return;
+        const snapshot: SavedDescriptiveAnalysis = {
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            createdAt: new Date().toISOString(),
+            datasetId: currentDataset.id,
+            result: JSON.parse(JSON.stringify(result)) as StatsResponse,
+            config: {
+                filters: filters.map(f => ({ col_key: f.col_key, values: [...f.values] })),
+                variables: [...statsVariables],
+                groupBy: [...statsGroupBy],
+                selectedStats: [...selectedStats],
+                runComparisonTests,
+                treatMissingAsZero,
+            },
+        };
+        setSavedAnalyses(prev => [snapshot, ...prev]);
+    }
+
+    function openSavedAnalysis(analysis: SavedDescriptiveAnalysis) {
+        if (!currentDataset || analysis.datasetId !== currentDataset.id) return;
+        setFilters(analysis.config.filters.map(f => ({ col_key: f.col_key, values: [...f.values] })));
+        setStatsVariables([...analysis.config.variables]);
+        setStatsGroupBy([...analysis.config.groupBy]);
+        setSelectedStats([...analysis.config.selectedStats]);
+        setRunComparisonTests(analysis.config.runComparisonTests);
+        setTreatMissingAsZero(analysis.config.treatMissingAsZero);
+        setResult(analysis.result);
+        setActiveTab('descritivas');
+    }
+
+    function removeSavedAnalysis(id: string) {
+        setSavedAnalyses(prev => prev.filter(a => a.id !== id));
+    }
+
     // Determine which stat columns to show in the table
     const visibleStatKeys = selectedStats.filter(k => STAT_TOOLTIPS[k]);
+    const primaryGroupedVariable = statsVariables[0] || '';
+    const primaryGroupedVariableName = primaryGroupedVariable ? getColumnDisplayName(primaryGroupedVariable) : '';
 
     if (!currentDataset) {
         return (
@@ -425,6 +511,9 @@ export function EstatisticasPage() {
                                             </p>
                                         </div>
                                         <div className="flex gap-2">
+                                            <button className="btn btn-secondary text-sm" onClick={saveCurrentAnalysis}>
+                                                <Save size={14} /> Salvar Analise
+                                            </button>
                                             <button className="btn btn-secondary text-sm" onClick={exportCSV}>
                                                 <Download size={14} /> CSV
                                             </button>
@@ -524,11 +613,17 @@ export function EstatisticasPage() {
                                         {/* Group summary */}
                                         {result.group_summaries && result.group_summaries.length > 0 && chartView === 'table' && (
                                             <div className="flex flex-wrap gap-2 mb-4">
-                                                {result.group_summaries.map(gs => (
-                                                    <div key={gs.group_key} className="chip text-xs">
-                                                        {gs.group_key}: {gs.sample_size.toLocaleString()} ({gs.pct_of_total.toFixed(1)}%)
-                                                    </div>
-                                                ))}
+                                                {result.group_summaries.map(gs => {
+                                                    const groupMean = primaryGroupedVariable
+                                                        ? getGroupMean(gs.group_key, primaryGroupedVariable)
+                                                        : null;
+                                                    return (
+                                                        <div key={gs.group_key} className="chip text-xs">
+                                                            {gs.group_key}: {gs.sample_size.toLocaleString()} ({gs.pct_of_total.toFixed(1)}%)
+                                                            {groupMean !== null && ` | Media ${primaryGroupedVariableName}: ${groupMean.toFixed(2)}`}
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
                                         )}
 
@@ -544,6 +639,7 @@ export function EstatisticasPage() {
                                                         {chartView === 'boxplot' && <GroupBoxplot data={chartData} />}
                                                         {chartView === 'bar' && <GroupBarChart data={chartData} />}
                                                         {chartView === 'violin' && <GroupViolinPlot data={chartData} />}
+                                                        {chartView === 'report' && <GroupAutomatedReport data={chartData} />}
                                                     </>
                                                 ) : (
                                                     <p className="text-sm text-muted text-center py-8">Selecione uma variavel para visualizar</p>
@@ -609,6 +705,77 @@ export function EstatisticasPage() {
                                     statistics={result.statistics}
                                     comparisonTests={result.group_comparison_tests}
                                 />
+
+                                {savedAnalyses.length > 0 && (
+                                    <div className="glass-card p-6 mt-4">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <div>
+                                                <h4 className="font-semibold">Relatorio de Analises na Aba</h4>
+                                                <p className="text-xs text-muted mt-1">
+                                                    {savedAnalyses.length} analise(s) salva(s) para comparacao rapida
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex flex-col gap-3">
+                                            {savedAnalyses.map((analysis, idx) => (
+                                                <div
+                                                    key={analysis.id}
+                                                    className="p-4 rounded-xl border border-[var(--glass-border)] bg-[var(--color-surface)]"
+                                                >
+                                                    <div className="flex items-start justify-between gap-3">
+                                                        <div className="min-w-0">
+                                                            <div className="font-medium">
+                                                                Analise {savedAnalyses.length - idx}
+                                                            </div>
+                                                            <div className="text-xs text-muted mt-1">
+                                                                {new Date(analysis.createdAt).toLocaleString('pt-BR')} | Amostra {analysis.result.sample_size.toLocaleString()} registros
+                                                                {analysis.result.total_groups && analysis.result.total_groups > 0 && ` | ${analysis.result.total_groups} grupos`}
+                                                            </div>
+                                                            <div className="text-xs text-secondary mt-2">
+                                                                Variaveis: {formatColumnList(analysis.config.variables)}
+                                                            </div>
+                                                            <div className="text-xs text-secondary mt-1">
+                                                                Agrupamento: {analysis.config.groupBy.length > 0 ? formatColumnList(analysis.config.groupBy) : 'Sem agrupamento'}
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex gap-2 shrink-0">
+                                                            <button className="btn btn-secondary text-xs" onClick={() => openSavedAnalysis(analysis)}>
+                                                                <Play size={12} /> Reabrir
+                                                            </button>
+                                                            <button className="btn btn-secondary text-xs" onClick={() => removeSavedAnalysis(analysis.id)}>
+                                                                <Trash2 size={12} /> Remover
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="table-container mt-3">
+                                                        <table className="table">
+                                                            <thead>
+                                                                <tr>
+                                                                    <th>Variavel</th>
+                                                                    <th>Media</th>
+                                                                    <th>D.P.</th>
+                                                                    <th>N</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                {analysis.result.statistics.slice(0, 6).map(stat => (
+                                                                    <tr key={`${analysis.id}-${stat.col_key}`}>
+                                                                        <td className="font-medium">{stat.name}</td>
+                                                                        <td>{typeof stat.mean === 'number' ? stat.mean.toFixed(2) : '-'}</td>
+                                                                        <td>{typeof stat.std === 'number' ? stat.std.toFixed(2) : '-'}</td>
+                                                                        <td>{stat.count.toLocaleString()}</td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
 

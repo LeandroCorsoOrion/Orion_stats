@@ -6,8 +6,7 @@ import {
     BarChart3,
     GitBranch,
     BrainCircuit,
-    FolderKanban,
-    Activity
+    FolderKanban
 } from 'lucide-react';
 
 const navItems = [
@@ -21,9 +20,13 @@ const navItems = [
 export function Sidebar() {
     return (
         <aside className="sidebar">
-            <div className="sidebar-logo">
-                <Activity size={32} className="text-primary" />
-                <span className="sidebar-logo-text">Orion Stats</span>
+            <div className="sidebar-logo sidebar-brand">
+                <img
+                    src="/orion-wordmark-only.png"
+                    alt="ORION"
+                    className="orion-wordmark orion-wordmark-sidebar"
+                    loading="eager"
+                />
             </div>
 
             <nav className="sidebar-nav">
