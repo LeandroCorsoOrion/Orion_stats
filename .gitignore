@@ -27,8 +27,16 @@ build/
 # Data files (keep structure, ignore content)
 backend/data/*
 !backend/data/.gitkeep
+!backend/data/**/*.xls
+!backend/data/**/*.xlsx
+!backend/data/**/*.xlsm
+!backend/data/**/*.xlsb
 backend/models/*
 !backend/models/.gitkeep
+!backend/models/**/*.xls
+!backend/models/**/*.xlsx
+!backend/models/**/*.xlsm
+!backend/models/**/*.xlsb
 
 # Logs
 *.log
