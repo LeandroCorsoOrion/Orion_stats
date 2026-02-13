@@ -1,24 +1,28 @@
 import { useState } from 'react';
-import { Loader2, Grid3X3, CheckCircle2, XCircle } from 'lucide-react';
+import { Loader2, Grid3X3, CheckCircle2, XCircle, PlusCircle } from 'lucide-react';
 import { getCrosstab } from '@/lib/api';
-import type { CrosstabResponse, FilterCondition, ColumnMeta } from '@/types';
+import type { CrosstabResponse, FilterCondition, ColumnMeta, ReportSection } from '@/types';
+import { buildCrosstabSection } from '@/lib/reportSections';
 
 interface Props {
     datasetId: number;
     filters: FilterCondition[];
     discreteColumns: ColumnMeta[];
     treatMissingAsZero: boolean;
+    onAddToReport?: (section: ReportSection) => void;
 }
 
-export function CrosstabTab({ datasetId, filters, discreteColumns, treatMissingAsZero }: Props) {
+export function CrosstabTab({ datasetId, filters, discreteColumns, treatMissingAsZero, onAddToReport }: Props) {
     const [rowVar, setRowVar] = useState('');
     const [colVar, setColVar] = useState('');
     const [result, setResult] = useState<CrosstabResponse | null>(null);
     const [loading, setLoading] = useState(false);
+    const [sectionAdded, setSectionAdded] = useState(false);
 
     async function calculate() {
         if (!rowVar || !colVar || rowVar === colVar) return;
         setLoading(true);
+        setSectionAdded(false);
         try {
             const resp = await getCrosstab({
                 dataset_id: datasetId, filters,
@@ -28,6 +32,21 @@ export function CrosstabTab({ datasetId, filters, discreteColumns, treatMissingA
             setResult(resp);
         } catch (e) { console.error(e); }
         finally { setLoading(false); }
+    }
+
+    function handleAddToReport() {
+        if (!result || !onAddToReport || !rowVar || !colVar) return;
+        const section = buildCrosstabSection({
+            filters,
+            row_variable: rowVar,
+            col_variable: colVar,
+            row_variable_name: result.row_variable_name,
+            col_variable_name: result.col_variable_name,
+            treat_missing_as_zero: treatMissingAsZero,
+            result,
+        });
+        onAddToReport(section);
+        setSectionAdded(true);
     }
 
     return (
@@ -59,6 +78,15 @@ export function CrosstabTab({ datasetId, filters, discreteColumns, treatMissingA
                     {loading ? <Loader2 size={14} className="animate-spin" /> : null}
                     Calcular
                 </button>
+                {result && onAddToReport && (
+                    <button className="btn btn-secondary text-sm ml-2" onClick={handleAddToReport}>
+                        <PlusCircle size={14} />
+                        Adicionar ao Relatorio
+                    </button>
+                )}
+                {sectionAdded && (
+                    <p className="text-xs text-success mt-2">Cruzamento adicionado ao relatorio composto.</p>
+                )}
             </div>
 
             {result && (

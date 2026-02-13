@@ -12,6 +12,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Pt, Inches, RGBColor
 
 from app.schemas.schemas import FilterCondition
+from app.services.crosstab_service import calculate_crosstab
 from app.services.stats_service import calculate_descriptive_stats
 
 
@@ -249,6 +250,324 @@ def _build_test_rows(tests) -> list[list[Any]]:
     return rows
 
 
+def _to_filter_conditions(raw_filters: Optional[list[Any]]) -> list[FilterCondition]:
+    """Normalize raw filter payload into schema-safe FilterCondition list."""
+    normalized = []
+    for item in raw_filters or []:
+        if isinstance(item, FilterCondition):
+            normalized.append(item)
+            continue
+        if not isinstance(item, dict):
+            continue
+        col_key = item.get("col_key")
+        values = item.get("values")
+        if not col_key or not isinstance(values, list):
+            continue
+        try:
+            normalized.append(FilterCondition(col_key=str(col_key), values=values))
+        except Exception:
+            continue
+    return normalized
+
+
+def _safe_int(value: Any, default: int) -> int:
+    try:
+        parsed = int(value)
+        return parsed if parsed > 0 else default
+    except (TypeError, ValueError):
+        return default
+
+
+def _safe_float_conf(value: Any, default: float = 0.95) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return default
+    if parsed <= 0 or parsed >= 1:
+        return default
+    return parsed
+
+
+def _add_descriptive_composite_block(
+    document: Document,
+    df: pd.DataFrame,
+    columns_meta: dict[str, str],
+    payload: dict[str, Any],
+    default_filters: Optional[list[FilterCondition]],
+    default_treat_missing: bool,
+):
+    """Render one descriptive section in composite report."""
+    variables = payload.get("variables") if isinstance(payload.get("variables"), list) else []
+    variables = [str(variable) for variable in variables if str(variable) in df.columns]
+    if not variables:
+        document.add_paragraph("Bloco ignorado: nenhuma variavel valida encontrada para analise descritiva.")
+        return
+
+    group_by = payload.get("group_by") if isinstance(payload.get("group_by"), list) else []
+    group_by = [str(group) for group in group_by if str(group) in df.columns]
+    filters = _to_filter_conditions(payload.get("filters"))
+    if not filters:
+        filters = default_filters or []
+
+    treat_missing_as_zero = payload.get("treat_missing_as_zero", default_treat_missing)
+    run_comparison_tests = bool(payload.get("run_comparison_tests", True if group_by else False))
+    confidence_level = _safe_float_conf(payload.get("confidence_level"), default=0.95)
+    max_groups = _safe_int(payload.get("max_groups"), default=200)
+
+    sample_size, stats, grouped, summaries, tests, total_groups = calculate_descriptive_stats(
+        df=df,
+        variables=variables,
+        columns_meta=columns_meta,
+        filters=filters if filters else None,
+        group_by=group_by if group_by else None,
+        treat_missing_as_zero=bool(treat_missing_as_zero),
+        confidence_level=confidence_level,
+        run_comparison_tests=run_comparison_tests,
+        max_groups=max_groups,
+    )
+
+    scope_rows = [
+        ["Amostra", sample_size],
+        ["Variaveis", ", ".join(columns_meta.get(variable, variable) for variable in variables)],
+        ["Agrupamento", ", ".join(columns_meta.get(group, group) for group in group_by) if group_by else "Sem agrupamento"],
+        ["Total de grupos", total_groups if total_groups is not None else "-"],
+        ["Filtros", _format_filter_summary(filters, columns_meta)],
+    ]
+    _add_table(document, ["Indicador", "Valor"], scope_rows)
+
+    overall_headers = [
+        "Variavel", "N", "Ausentes", "% Ausentes", "Media", "Mediana", "DP", "CV%",
+        "Min", "Max", "Amplitude", "Q1", "Q3", "IQR", "P5", "P95",
+    ]
+    overall_rows = []
+    for stat in stats:
+        overall_rows.append([
+            stat.name,
+            stat.count,
+            stat.missing_count,
+            _fmt(stat.missing_pct, 2),
+            _fmt(stat.mean),
+            _fmt(stat.median),
+            _fmt(stat.std),
+            _fmt(stat.cv, 2),
+            _fmt(stat.min),
+            _fmt(stat.max),
+            _fmt(stat.range),
+            _fmt(stat.q1),
+            _fmt(stat.q3),
+            _fmt(stat.iqr),
+            _fmt(stat.p5),
+            _fmt(stat.p95),
+        ])
+    _add_table(document, overall_headers, overall_rows if overall_rows else [["-"] * len(overall_headers)])
+
+    if grouped:
+        summary_headers = ["Grupo", "N Grupo", "% Total"]
+        summary_rows = _build_group_summary_rows(summaries)
+        _add_table(document, summary_headers, summary_rows if summary_rows else [["-", "-", "-"]])
+
+    if tests:
+        test_headers = ["Variavel", "Teste", "Estatistica", "p-valor", "Significativo", "Tamanho de efeito"]
+        test_rows = []
+        for test in tests:
+            test_rows.append([
+                test.variable_name,
+                test.test_name_display,
+                _fmt(test.statistic),
+                _fmt(test.p_value, 6),
+                "Sim" if test.significant else "Nao",
+                f"{test.effect_size_name} = {_fmt(test.effect_size)}" if test.effect_size is not None else "-",
+            ])
+        _add_table(document, test_headers, test_rows if test_rows else [["-"] * len(test_headers)])
+
+
+def _add_crosstab_composite_block(
+    document: Document,
+    df: pd.DataFrame,
+    columns_meta: dict[str, str],
+    payload: dict[str, Any],
+    default_filters: Optional[list[FilterCondition]],
+    default_treat_missing: bool,
+):
+    """Render one crosstab section in composite report."""
+    row_variable = str(payload.get("row_variable", "")).strip()
+    col_variable = str(payload.get("col_variable", "")).strip()
+    if not row_variable or not col_variable:
+        document.add_paragraph("Bloco ignorado: row_variable e col_variable sao obrigatorias no crosstab.")
+        return
+    if row_variable not in df.columns or col_variable not in df.columns:
+        document.add_paragraph("Bloco ignorado: variaveis do crosstab nao encontradas no dataset atual.")
+        return
+
+    filters = _to_filter_conditions(payload.get("filters"))
+    if not filters:
+        filters = default_filters or []
+    treat_missing_as_zero = payload.get("treat_missing_as_zero", default_treat_missing)
+    max_rows = _safe_int(payload.get("max_rows"), default=30)
+    max_cols = _safe_int(payload.get("max_cols"), default=30)
+
+    result = calculate_crosstab(
+        df=df,
+        row_variable=row_variable,
+        col_variable=col_variable,
+        columns_meta=columns_meta,
+        filters=filters if filters else None,
+        max_rows=max_rows,
+        max_cols=max_cols,
+        treat_missing_as_zero=bool(treat_missing_as_zero),
+    )
+
+    info_rows = [
+        ["Variavel de linhas", result.row_variable_name],
+        ["Variavel de colunas", result.col_variable_name],
+        ["Amostra", result.sample_size],
+        ["Total da tabela", result.grand_total],
+        ["Filtros", _format_filter_summary(filters, columns_meta)],
+    ]
+    _add_table(document, ["Indicador", "Valor"], info_rows)
+
+    headers = [result.row_variable_name] + result.col_labels + ["Total Linha"]
+    table_rows = []
+    for row_idx, row_label in enumerate(result.row_labels):
+        values = [f"{count} ({result.percentages[row_idx][col_idx]}%)" for col_idx, count in enumerate(result.counts[row_idx])]
+        table_rows.append([row_label, *values, result.row_totals[row_idx]])
+    totals_row = ["Total Coluna", *result.col_totals, result.grand_total]
+    table_rows.append(totals_row)
+    _add_table(document, headers, table_rows)
+
+    if result.chi_square is not None:
+        test_rows = [
+            ["X²", _fmt(result.chi_square)],
+            ["p-valor", _fmt(result.chi_square_p_value, 6)],
+            ["V de Cramer", _fmt(result.cramers_v, 4)],
+            ["Interpretacao", result.interpretation or "-"],
+        ]
+        _add_table(document, ["Teste Qui-Quadrado", "Resultado"], test_rows)
+
+
+def _add_ml_composite_block(
+    document: Document,
+    payload: dict[str, Any],
+):
+    """Render one ML section from payload snapshot."""
+    snapshot = payload.get("result_snapshot") if isinstance(payload.get("result_snapshot"), dict) else {}
+    target_name = payload.get("target_name") or payload.get("target") or "-"
+    feature_names = payload.get("feature_names") if isinstance(payload.get("feature_names"), list) else payload.get("features", [])
+    features_str = ", ".join(str(item) for item in feature_names) if feature_names else "-"
+
+    info_rows = [
+        ["Variavel alvo", target_name],
+        ["Features", features_str],
+        ["Metrica de selecao", str(payload.get("selection_metric", "-")).upper()],
+        ["Modelo selecionado", payload.get("selected_model") or snapshot.get("best_model_label") or "-"],
+        ["Model ID", snapshot.get("model_id") or "-"],
+    ]
+    _add_table(document, ["Configuracao ML", "Valor"], info_rows)
+
+    models = snapshot.get("models") if isinstance(snapshot.get("models"), list) else []
+    if models:
+        metric_headers = ["Modelo", "R2", "RMSE", "MAE", "MAPE", "Melhor"]
+        metric_rows = []
+        for model in models:
+            if not isinstance(model, dict):
+                continue
+            metric_rows.append([
+                model.get("label", "-"),
+                _fmt(model.get("r2")),
+                _fmt(model.get("rmse")),
+                _fmt(model.get("mae")),
+                _fmt(model.get("mape"), 2),
+                "Sim" if bool(model.get("is_best")) else "Nao",
+            ])
+        _add_table(document, metric_headers, metric_rows if metric_rows else [["-"] * len(metric_headers)])
+
+    linear = snapshot.get("linear_regression") if isinstance(snapshot.get("linear_regression"), dict) else {}
+    if linear:
+        linear_rows = [
+            ["Equacao", linear.get("equation", "-")],
+            ["R2", _fmt(linear.get("r2"))],
+            ["RMSE", _fmt(linear.get("rmse"))],
+            ["Intercepto", _fmt(linear.get("intercept"))],
+        ]
+        _add_table(document, ["Regressao Linear", "Valor"], linear_rows)
+
+        coefficients = linear.get("coefficients") if isinstance(linear.get("coefficients"), list) else []
+        if coefficients:
+            coef_headers = ["Feature", "Coef.", "Erro Padrao", "t-valor", "p-valor"]
+            coef_rows = []
+            for coef in coefficients[:30]:
+                if not isinstance(coef, dict):
+                    continue
+                coef_rows.append([
+                    coef.get("feature", "-"),
+                    _fmt(coef.get("coefficient")),
+                    _fmt(coef.get("std_error")),
+                    _fmt(coef.get("t_value")),
+                    _fmt(coef.get("p_value"), 6),
+                ])
+            _add_table(document, coef_headers, coef_rows if coef_rows else [["-"] * len(coef_headers)])
+
+
+def _add_composite_sections(
+    document: Document,
+    df: pd.DataFrame,
+    columns_meta: dict[str, str],
+    report_sections: Optional[list[dict[str, Any]]],
+    default_filters: Optional[list[FilterCondition]],
+    default_treat_missing: bool,
+):
+    """Render user-composed analysis blocks inside the exported report."""
+    if not report_sections:
+        return
+
+    _add_section_title(document, "8. Blocos Compostos do Relatorio", level=1)
+
+    valid_sections = [section for section in report_sections if isinstance(section, dict)]
+    if not valid_sections:
+        document.add_paragraph("Nenhum bloco valido encontrado no relatorio composto.")
+        return
+
+    for index, section in enumerate(valid_sections, start=1):
+        section_type = str(section.get("section_type", "")).strip().lower()
+        title = str(section.get("title", f"Bloco {index}"))
+        created_at = section.get("created_at")
+        payload = section.get("payload") if isinstance(section.get("payload"), dict) else {}
+
+        _add_section_title(document, f"8.{index} {title}", level=2)
+        if created_at:
+            document.add_paragraph(f"Criado em: {created_at}")
+        document.add_paragraph(f"Tipo: {section_type or '-'}")
+
+        try:
+            if section_type == "descriptive":
+                _add_descriptive_composite_block(
+                    document=document,
+                    df=df,
+                    columns_meta=columns_meta,
+                    payload=payload,
+                    default_filters=default_filters,
+                    default_treat_missing=default_treat_missing,
+                )
+            elif section_type == "crosstab":
+                _add_crosstab_composite_block(
+                    document=document,
+                    df=df,
+                    columns_meta=columns_meta,
+                    payload=payload,
+                    default_filters=default_filters,
+                    default_treat_missing=default_treat_missing,
+                )
+            elif section_type == "ml":
+                _add_ml_composite_block(
+                    document=document,
+                    payload=payload,
+                )
+            else:
+                document.add_paragraph("Tipo de bloco nao suportado neste export.")
+        except Exception as error:
+            document.add_paragraph(f"Falha ao renderizar bloco '{title}': {str(error)}")
+
+
 def create_word_export(
     df: pd.DataFrame,
     variables: list[str],
@@ -256,6 +575,7 @@ def create_word_export(
     filters: Optional[list[FilterCondition]] = None,
     group_by: Optional[list[str]] = None,
     treat_missing_as_zero: bool = True,
+    report_sections: Optional[list[dict[str, Any]]] = None,
 ) -> io.BytesIO:
     """Create DOCX report with complete statistics and executive interpretation."""
     sample_size, stats, grouped, summaries, tests, total_groups = calculate_descriptive_stats(
@@ -351,6 +671,15 @@ def create_word_export(
     ]
     for bullet in bullets:
         document.add_paragraph(bullet, style="List Bullet")
+
+    _add_composite_sections(
+        document=document,
+        df=df,
+        columns_meta=columns_meta,
+        report_sections=report_sections,
+        default_filters=filters,
+        default_treat_missing=treat_missing_as_zero,
+    )
 
     buffer = io.BytesIO()
     document.save(buffer)

@@ -313,6 +313,7 @@ def export_word(request: ExportRequest, db: Session = Depends(get_db)):
             filters=request.filters if request.filters else None,
             group_by=request.group_by if request.group_by else None,
             treat_missing_as_zero=request.treat_missing_as_zero,
+            report_sections=request.report_sections if request.report_sections else None,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error creating word export: {str(e)}")

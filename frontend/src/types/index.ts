@@ -339,6 +339,18 @@ export interface MLPredictResponse {
     expected_error: number;
 }
 
+// ---------- Composite Report Types ----------
+
+export type ReportSectionType = 'descriptive' | 'crosstab' | 'ml';
+
+export interface ReportSection {
+    id: string;
+    section_type: ReportSectionType;
+    title: string;
+    created_at: string;
+    payload: Record<string, unknown>;
+}
+
 // ---------- Scenario Types ----------
 
 export interface ScenarioPayload {
@@ -352,6 +364,7 @@ export interface ScenarioPayload {
     treat_missing_as_zero: boolean;
     best_model_label?: string;
     model_id?: string;
+    report_sections?: ReportSection[];
 }
 
 export interface ScenarioCreate {
@@ -401,4 +414,3 @@ export interface ActivityLogList {
     logs: ActivityLog[];
     total: number;
 }
-

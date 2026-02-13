@@ -1,10 +1,11 @@
 // Orion Stats - Modeling Page
 
 import { useState } from 'react';
-import { BrainCircuit, Loader2, Play, Trophy, AlertCircle, Calculator, ArrowRight, Database, Info } from 'lucide-react';
+import { BrainCircuit, Loader2, Play, Trophy, AlertCircle, Calculator, ArrowRight, Database, Info, PlusCircle } from 'lucide-react';
 import { trainModels, predict } from '@/lib/api';
 import { useApp } from '@/lib/context';
-import type { MLTrainResponse, MLPredictResponse, ModelMetrics, LinearCoefficient } from '@/types';
+import type { MLPredictResponse, ModelMetrics, LinearCoefficient } from '@/types';
+import { buildMLSection } from '@/lib/reportSections';
 
 export function ModelagemPage() {
     const {
@@ -13,7 +14,9 @@ export function ModelagemPage() {
         features, setFeatures,
         selectionMetric, setSelectionMetric,
         treatMissingAsZero,
-        mlResult, setMlResult
+        mlResult, setMlResult,
+        addReportSection,
+        reportSections
     } = useApp();
 
     const [loading, setLoading] = useState(false);
@@ -22,6 +25,7 @@ export function ModelagemPage() {
     const [inputValues, setInputValues] = useState<Record<string, string>>({});
     const [prediction, setPrediction] = useState<MLPredictResponse | null>(null);
     const [selectedModel, setSelectedModel] = useState<string | null>(null);
+    const [sectionAdded, setSectionAdded] = useState(false);
 
     const numericColumns = currentDataset?.columns.filter(
         (c) => c.var_type === 'continuous' || c.var_type === 'discrete'
@@ -46,6 +50,7 @@ export function ModelagemPage() {
         setLoading(true);
         setError(null);
         setPrediction(null);
+        setSectionAdded(false);
 
         try {
             const response = await trainModels({
@@ -72,6 +77,32 @@ export function ModelagemPage() {
         } finally {
             setLoading(false);
         }
+    }
+
+    function addMlToReport() {
+        if (!mlResult || !target || features.length === 0) {
+            setError('Treine um modelo antes de adicionar ao relatorio.');
+            return;
+        }
+
+        const targetCol = currentDataset?.columns.find((c) => c.col_key === target);
+        const featureNames = features.map((featureKey) => {
+            const featureCol = currentDataset?.columns.find((c) => c.col_key === featureKey);
+            return featureCol?.name || featureKey;
+        });
+
+        addReportSection(buildMLSection({
+            filters,
+            target,
+            target_name: targetCol?.name || target,
+            features,
+            feature_names: featureNames,
+            selection_metric: selectionMetric,
+            treat_missing_as_zero: treatMissingAsZero,
+            selected_model: selectedModel,
+            ml_result: mlResult,
+        }));
+        setSectionAdded(true);
     }
 
     async function handlePredict() {
@@ -228,10 +259,26 @@ export function ModelagemPage() {
                         <>
                             {/* Model Metrics */}
                             <div className="glass-card p-6">
-                                <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
-                                    <Trophy className="text-warning" size={20} />
-                                    Comparativo de Modelos
-                                </h3>
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="font-semibold text-lg flex items-center gap-2">
+                                        <Trophy className="text-warning" size={20} />
+                                        Comparativo de Modelos
+                                    </h3>
+                                    <button className="btn btn-secondary text-sm" onClick={addMlToReport}>
+                                        <PlusCircle size={14} />
+                                        Adicionar ao Relatorio
+                                    </button>
+                                </div>
+                                {sectionAdded && (
+                                    <p className="text-xs text-success mb-3">
+                                        Bloco de modelagem adicionado ao relatorio composto.
+                                    </p>
+                                )}
+                                {reportSections.length > 0 && (
+                                    <p className="text-xs text-secondary mb-3">
+                                        Itens no relatorio composto: {reportSections.length}
+                                    </p>
+                                )}
 
                                 <div className="grid grid-cols-5 gap-4">
                                     {mlResult.models.map((model: ModelMetrics) => (

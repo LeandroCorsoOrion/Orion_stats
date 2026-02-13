@@ -330,6 +330,7 @@ class ExportRequest(BaseModel):
     treat_missing_as_zero: bool = True
     selected_stats: Optional[list[str]] = None
     include_sheets: list[str] = ["descriptive"]
+    report_sections: list[dict[str, Any]] = []
 
 
 # ---------- Correlation Schemas ----------
@@ -427,6 +428,7 @@ class ScenarioPayload(BaseModel):
     treat_missing_as_zero: bool = True
     best_model_label: Optional[str] = None
     model_id: Optional[str] = None
+    report_sections: list[dict[str, Any]] = []
 
 
 class ScenarioCreate(BaseModel):

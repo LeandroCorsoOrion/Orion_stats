@@ -1,11 +1,12 @@
 // Orion Stats - Statistics Page (Full Evolution)
 
 import { useState, useEffect, useRef } from 'react';
-import { BarChart3, Download, Loader2, X, FileSpreadsheet, FileText, Save, Play, Trash2 } from 'lucide-react';
+import { BarChart3, Download, Loader2, X, FileSpreadsheet, FileText, Save, Play, Trash2, PlusCircle } from 'lucide-react';
 import { getDescriptiveStats, getUniqueValues, getChartData, exportStatsExcel, exportStatsWord } from '@/lib/api';
 import { useApp } from '@/lib/context';
 import { STAT_TOOLTIPS, STAT_PRESETS } from '@/lib/statTooltips';
-import type { ColumnStats, StatsResponse, ChartDataResponse, FilterCondition } from '@/types';
+import type { ColumnStats, StatsResponse, ChartDataResponse, FilterCondition, ReportSection } from '@/types';
+import { buildDescriptiveSection } from '@/lib/reportSections';
 
 import { StatsTabNav } from '@/components/stats/StatsTabNav';
 import { StatSelectorPanel } from '@/components/stats/StatSelectorPanel';
@@ -42,7 +43,8 @@ export function EstatisticasPage() {
         currentDataset, filters, setFilters,
         statsVariables, setStatsVariables,
         statsGroupBy, setStatsGroupBy,
-        treatMissingAsZero, setTreatMissingAsZero
+        treatMissingAsZero, setTreatMissingAsZero,
+        reportSections, addReportSection, removeReportSection, clearReportSections
     } = useApp();
 
     const [loading, setLoading] = useState(false);
@@ -64,6 +66,7 @@ export function EstatisticasPage() {
     const [savedAnalyses, setSavedAnalyses] = useState<SavedDescriptiveAnalysis[]>([]);
     const [applyGroupFilters, setApplyGroupFilters] = useState(false);
     const [statsError, setStatsError] = useState<string | null>(null);
+    const [reportNotice, setReportNotice] = useState<string | null>(null);
 
     const discreteColumns = currentDataset?.columns.filter(
         (c) => c.var_type === 'categorical' || c.var_type === 'discrete'
@@ -87,6 +90,8 @@ export function EstatisticasPage() {
         setSavedAnalyses([]);
         setApplyGroupFilters(false);
         setStatsError(null);
+        setReportNotice(null);
+        clearReportSections();
     }, [currentDataset?.id]);
 
     // Auto-calculate when variables change
@@ -228,6 +233,7 @@ export function EstatisticasPage() {
                 treat_missing_as_zero: treatMissingAsZero,
                 selected_stats: selectedStats,
                 run_comparison_tests: runComparisonTests,
+                report_sections: reportSections,
             });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -241,6 +247,42 @@ export function EstatisticasPage() {
         } finally {
             setExportingWord(false);
         }
+    }
+
+    function addCurrentDescriptiveToReport() {
+        if (!currentDataset || statsVariables.length === 0) {
+            setStatsError('Selecione variaveis na analise descritiva antes de adicionar ao relatorio.');
+            return;
+        }
+        const variableNames = statsVariables.map(getColumnDisplayName).join(', ');
+        const groupNames = statsGroupBy.length > 0
+            ? ` | Agrupado por ${statsGroupBy.map(getColumnDisplayName).join(', ')}`
+            : '';
+        const section = buildDescriptiveSection({
+            title: `Descritiva: ${variableNames}${groupNames}`,
+            filters: getEffectiveFilters(),
+            variables: statsVariables,
+            group_by: statsGroupBy,
+            selected_stats: selectedStats,
+            run_comparison_tests: runComparisonTests,
+            treat_missing_as_zero: treatMissingAsZero,
+            max_groups: 200,
+            confidence_level: 0.95,
+        });
+        addReportSection(section);
+        setReportNotice('Analise descritiva adicionada ao relatorio composto.');
+        setStatsError(null);
+    }
+
+    function addSectionToReport(section: ReportSection) {
+        addReportSection(section);
+        setReportNotice(`Bloco adicionado: ${section.title}`);
+    }
+
+    function getSectionTypeLabel(sectionType: ReportSection['section_type']) {
+        if (sectionType === 'descriptive') return 'Descritiva';
+        if (sectionType === 'crosstab') return 'Crosstab';
+        return 'Modelagem ML';
     }
 
     function handleFilterChange(colKey: string, selectedValues: (string | number)[]) {
@@ -411,6 +453,7 @@ export function EstatisticasPage() {
     const primaryGroupedVariableName = primaryGroupedVariable ? getColumnDisplayName(primaryGroupedVariable) : '';
     const ignoredGroupFilters = getIgnoredGroupFilters();
     const ignoredGroupFilterNames = ignoredGroupFilters.map(f => getColumnDisplayName(f.col_key));
+    const reportItemCount = reportSections.length;
 
     if (!currentDataset) {
         return (
@@ -672,6 +715,10 @@ export function EstatisticasPage() {
                                             )}
                                         </div>
                                         <div className="flex gap-2">
+                                            <button className="btn btn-secondary text-sm" onClick={addCurrentDescriptiveToReport}>
+                                                <PlusCircle size={14} />
+                                                Adicionar ao Relatorio
+                                            </button>
                                             <button
                                                 className="btn btn-word text-sm font-semibold"
                                                 onClick={handleExportWord}
@@ -693,6 +740,43 @@ export function EstatisticasPage() {
                                                 Excel
                                             </button>
                                         </div>
+                                    </div>
+                                    <div className="glass-card p-4 mb-4">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <h4 className="font-semibold text-sm">Relatorio Composto</h4>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs text-primary">{reportItemCount} bloco(s)</span>
+                                                {reportItemCount > 0 && (
+                                                    <button className="btn btn-ghost text-xs py-1 px-2" onClick={clearReportSections}>
+                                                        Limpar fila
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                        {reportNotice && (
+                                            <p className="text-xs text-success mb-2">{reportNotice}</p>
+                                        )}
+                                        {reportItemCount === 0 ? (
+                                            <p className="text-xs text-muted">
+                                                Adicione analises descritivas, cruzamentos e modelagem para exportar tudo em um unico relatorio.
+                                            </p>
+                                        ) : (
+                                            <div className="flex flex-col gap-2 max-h-40 overflow-y-auto">
+                                                {reportSections.map((section) => (
+                                                    <div key={section.id} className="flex items-center justify-between p-2 rounded bg-[var(--color-surface)]">
+                                                        <div className="min-w-0">
+                                                            <div className="text-xs font-medium truncate">{section.title}</div>
+                                                            <div className="text-xs text-muted">
+                                                                {getSectionTypeLabel(section.section_type)} | {new Date(section.created_at).toLocaleString('pt-BR')}
+                                                            </div>
+                                                        </div>
+                                                        <button className="btn btn-ghost text-xs py-1 px-2" onClick={() => removeReportSection(section.id)}>
+                                                            Remover
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* Stats Cards - top 4 */}
@@ -995,6 +1079,7 @@ export function EstatisticasPage() {
                     filters={filters}
                     discreteColumns={discreteColumns}
                     treatMissingAsZero={treatMissingAsZero}
+                    onAddToReport={addSectionToReport}
                 />
             )}
 

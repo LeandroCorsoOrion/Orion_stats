@@ -1,40 +1,48 @@
 // Orion Stats - App Context
 
-import { createContext, useContext, useState, ReactNode } from 'react';
-import type { DatasetMeta, FilterCondition, MLTrainResponse, ScenarioPayload } from '@/types';
+import { createContext, useContext, useState } from 'react';
+import type { Dispatch, ReactNode, SetStateAction } from 'react';
+import type { DatasetMeta, FilterCondition, MLTrainResponse, ReportSection, ScenarioPayload } from '@/types';
 
 interface AppContextType {
     // Dataset
     currentDataset: DatasetMeta | null;
-    setCurrentDataset: (dataset: DatasetMeta | null) => void;
+    setCurrentDataset: Dispatch<SetStateAction<DatasetMeta | null>>;
 
     // Filters
     filters: FilterCondition[];
-    setFilters: (filters: FilterCondition[]) => void;
+    setFilters: Dispatch<SetStateAction<FilterCondition[]>>;
 
     // Settings
     treatMissingAsZero: boolean;
-    setTreatMissingAsZero: (value: boolean) => void;
+    setTreatMissingAsZero: Dispatch<SetStateAction<boolean>>;
 
     // Stats variables
     statsVariables: string[];
-    setStatsVariables: (vars: string[]) => void;
+    setStatsVariables: Dispatch<SetStateAction<string[]>>;
     statsGroupBy: string[];
-    setStatsGroupBy: (vars: string[]) => void;
+    setStatsGroupBy: Dispatch<SetStateAction<string[]>>;
 
     // Correlation variables
     correlationVariables: string[];
-    setCorrelationVariables: (vars: string[]) => void;
+    setCorrelationVariables: Dispatch<SetStateAction<string[]>>;
 
     // ML
     target: string;
-    setTarget: (target: string) => void;
+    setTarget: Dispatch<SetStateAction<string>>;
     features: string[];
-    setFeatures: (features: string[]) => void;
+    setFeatures: Dispatch<SetStateAction<string[]>>;
     selectionMetric: 'r2' | 'rmse' | 'mae';
-    setSelectionMetric: (metric: 'r2' | 'rmse' | 'mae') => void;
+    setSelectionMetric: Dispatch<SetStateAction<'r2' | 'rmse' | 'mae'>>;
     mlResult: MLTrainResponse | null;
-    setMlResult: (result: MLTrainResponse | null) => void;
+    setMlResult: Dispatch<SetStateAction<MLTrainResponse | null>>;
+
+    // Composite report sections
+    reportSections: ReportSection[];
+    setReportSections: Dispatch<SetStateAction<ReportSection[]>>;
+    addReportSection: (section: ReportSection) => void;
+    removeReportSection: (id: string) => void;
+    clearReportSections: () => void;
 
     // Scenario
     loadScenario: (payload: ScenarioPayload) => void;
@@ -54,6 +62,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const [features, setFeatures] = useState<string[]>([]);
     const [selectionMetric, setSelectionMetric] = useState<'r2' | 'rmse' | 'mae'>('rmse');
     const [mlResult, setMlResult] = useState<MLTrainResponse | null>(null);
+    const [reportSections, setReportSections] = useState<ReportSection[]>([]);
+
+    const addReportSection = (section: ReportSection) => {
+        setReportSections((prev) => [section, ...prev]);
+    };
+
+    const removeReportSection = (id: string) => {
+        setReportSections((prev) => prev.filter((item) => item.id !== id));
+    };
+
+    const clearReportSections = () => {
+        setReportSections([]);
+    };
 
     const loadScenario = (payload: ScenarioPayload) => {
         setFilters(payload.filters || []);
@@ -64,6 +85,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setFeatures(payload.features || []);
         setSelectionMetric((payload.selection_metric as 'r2' | 'rmse' | 'mae') || 'rmse');
         setTreatMissingAsZero(payload.treat_missing_as_zero ?? true);
+        setReportSections(payload.report_sections || []);
     };
 
     const getCurrentPayload = (): ScenarioPayload => ({
@@ -77,6 +99,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         treat_missing_as_zero: treatMissingAsZero,
         best_model_label: mlResult?.best_model_label,
         model_id: mlResult?.model_id,
+        report_sections: reportSections,
     });
 
     return (
@@ -91,6 +114,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             features, setFeatures,
             selectionMetric, setSelectionMetric,
             mlResult, setMlResult,
+            reportSections, setReportSections,
+            addReportSection, removeReportSection, clearReportSections,
             loadScenario, getCurrentPayload,
         }}>
             {children}

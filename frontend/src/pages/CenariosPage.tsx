@@ -259,6 +259,7 @@ export function CenariosPage() {
                                     <th>Descrição</th>
                                     <th>Filtros</th>
                                     <th>Variáveis</th>
+                                    <th>Relatório</th>
                                     <th>Modelo</th>
                                     <th>Atualizado</th>
                                     <th className="w-40">Ações</th>
@@ -296,6 +297,9 @@ export function CenariosPage() {
                                         </td>
                                         <td className="text-sm">
                                             {scenario.payload.features.length} features
+                                        </td>
+                                        <td className="text-sm">
+                                            {(scenario.payload.report_sections || []).length} blocos
                                         </td>
                                         <td className="text-sm">
                                             {scenario.payload.best_model_label ? (
