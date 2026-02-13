@@ -147,6 +147,25 @@ body {
   border-color: var(--color-primary);
 }
 
+.btn-word {
+  background: linear-gradient(135deg, #a0d0ff 0%, #4ade80 100%);
+  color: #0d1421;
+  border: 1px solid rgba(160, 208, 255, 0.35);
+  box-shadow: 0 6px 18px rgba(74, 222, 128, 0.35);
+}
+
+.btn-word:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(74, 222, 128, 0.45);
+}
+
+.btn-word:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
 .btn-ghost {
   background: transparent;
   color: var(--color-text-secondary);

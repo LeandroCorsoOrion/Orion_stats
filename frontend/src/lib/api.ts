@@ -136,6 +136,11 @@ export async function exportStatsExcel(request: object): Promise<Blob> {
     return response.data;
 }
 
+export async function exportStatsWord(request: object): Promise<Blob> {
+    const response = await api.post('/stats/export-word', request, { responseType: 'blob' });
+    return response.data;
+}
+
 // ---------- Correlation API ----------
 
 export async function getCorrelation(request: CorrelationRequest): Promise<CorrelationResponse> {
@@ -238,4 +243,3 @@ export async function getDatasetActivityHistory(
 }
 
 export default api;
-

@@ -1,8 +1,8 @@
 // Orion Stats - Statistics Page (Full Evolution)
 
 import { useState, useEffect, useRef } from 'react';
-import { BarChart3, Download, Loader2, X, FileSpreadsheet, Save, Play, Trash2 } from 'lucide-react';
-import { getDescriptiveStats, getUniqueValues, getChartData, exportStatsExcel } from '@/lib/api';
+import { BarChart3, Download, Loader2, X, FileSpreadsheet, FileText, Save, Play, Trash2 } from 'lucide-react';
+import { getDescriptiveStats, getUniqueValues, getChartData, exportStatsExcel, exportStatsWord } from '@/lib/api';
 import { useApp } from '@/lib/context';
 import { STAT_TOOLTIPS, STAT_PRESETS } from '@/lib/statTooltips';
 import type { ColumnStats, StatsResponse, ChartDataResponse, FilterCondition } from '@/types';
@@ -60,6 +60,7 @@ export function EstatisticasPage() {
     const [chartVariable, setChartVariable] = useState('');
     const [loadingChart, setLoadingChart] = useState(false);
     const [exportingExcel, setExportingExcel] = useState(false);
+    const [exportingWord, setExportingWord] = useState(false);
     const [savedAnalyses, setSavedAnalyses] = useState<SavedDescriptiveAnalysis[]>([]);
     const [applyGroupFilters, setApplyGroupFilters] = useState(false);
     const [statsError, setStatsError] = useState<string | null>(null);
@@ -211,6 +212,34 @@ export function EstatisticasPage() {
             console.error('Failed to export Excel:', e);
         } finally {
             setExportingExcel(false);
+        }
+    }
+
+    async function handleExportWord() {
+        if (!currentDataset) return;
+        setExportingWord(true);
+        try {
+            const effectiveFilters = getEffectiveFilters();
+            const blob = await exportStatsWord({
+                dataset_id: currentDataset.id,
+                filters: effectiveFilters,
+                variables: statsVariables,
+                group_by: statsGroupBy,
+                treat_missing_as_zero: treatMissingAsZero,
+                selected_stats: selectedStats,
+                run_comparison_tests: runComparisonTests,
+            });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `relatorio_estatistico_${currentDataset.name}.docx`;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (e) {
+            console.error('Failed to export Word:', e);
+            setStatsError('Falha ao exportar Word. Tente novamente.');
+        } finally {
+            setExportingWord(false);
         }
     }
 
@@ -643,6 +672,15 @@ export function EstatisticasPage() {
                                             )}
                                         </div>
                                         <div className="flex gap-2">
+                                            <button
+                                                className="btn btn-word text-sm font-semibold"
+                                                onClick={handleExportWord}
+                                                disabled={exportingWord}
+                                                title="Exportar relatorio executivo completo em Word"
+                                            >
+                                                {exportingWord ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
+                                                Word Executivo
+                                            </button>
                                             <button className="btn btn-secondary text-sm" onClick={saveCurrentAnalysis}>
                                                 <Save size={14} /> Salvar Analise
                                             </button>

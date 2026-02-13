@@ -293,3 +293,32 @@ def export_excel(request: ExportRequest, db: Session = Depends(get_db)):
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f"attachment; filename=estatisticas_{dataset.name}.xlsx"},
     )
+
+
+@router.post("/export-word")
+def export_word(request: ExportRequest, db: Session = Depends(get_db)):
+    """Export statistics to Word file."""
+    from app.services.word_export_service import create_word_export
+
+    dataset, df, columns_meta = _load_dataset(db, request.dataset_id)
+
+    if not request.variables:
+        raise HTTPException(status_code=400, detail="No variables selected")
+
+    try:
+        buffer = create_word_export(
+            df=df,
+            variables=request.variables,
+            columns_meta=columns_meta,
+            filters=request.filters if request.filters else None,
+            group_by=request.group_by if request.group_by else None,
+            treat_missing_as_zero=request.treat_missing_as_zero,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error creating word export: {str(e)}")
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f"attachment; filename=relatorio_estatistico_{dataset.name}.docx"},
+    )
