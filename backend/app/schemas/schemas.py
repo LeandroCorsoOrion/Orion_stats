@@ -99,7 +99,7 @@ class StatsRequest(BaseModel):
     run_comparison_tests: bool = False
     confidence_level: float = 0.95
     sort_groups_by: Optional[str] = None  # 'name', 'count', 'mean_asc', 'mean_desc'
-    max_groups: int = 50
+    max_groups: int = 200
 
 
 class ColumnStats(BaseModel):
@@ -308,7 +308,7 @@ class ChartDataRequest(BaseModel):
     variable: str
     group_by: str
     treat_missing_as_zero: bool = True
-    max_groups: int = 20
+    max_groups: int = 200
 
 
 class ChartDataResponse(BaseModel):
@@ -479,4 +479,3 @@ class ActivityLogList(BaseModel):
     """List of activity logs."""
     logs: list[ActivityLogResponse]
     total: int
-

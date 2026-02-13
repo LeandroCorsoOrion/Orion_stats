@@ -27,7 +27,18 @@ def _load_dataset(db: Session, dataset_id: int):
     dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
-    df = get_cached_dataframe(dataset.id, dataset.parquet_path)
+    try:
+        df = get_cached_dataframe(dataset.id, dataset.parquet_path)
+    except FileNotFoundError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Dataset file not found: {dataset.parquet_path}",
+        ) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error loading dataset file: {str(e)}",
+        ) from e
     columns_meta = {col['col_key']: col['name'] for col in dataset.columns_meta}
     return dataset, df, columns_meta
 

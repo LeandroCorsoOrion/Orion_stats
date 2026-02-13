@@ -97,7 +97,24 @@ def save_parquet(df: pd.DataFrame, dataset_id: int) -> Path:
 
 def load_parquet(parquet_path: str | Path) -> pd.DataFrame:
     """Load DataFrame from parquet file."""
-    return pd.read_parquet(parquet_path, engine='pyarrow')
+    raw_path = str(parquet_path)
+    normalized_path = raw_path.replace("\\", "/")
+    path = Path(normalized_path)
+
+    if not path.is_absolute():
+        # Backward compatibility for older DB rows that stored relative paths.
+        candidates = [
+            Path.cwd() / path,
+            settings.DATA_DIR.parent / Path(raw_path),
+            settings.DATA_DIR.parent / path,
+            settings.DATA_DIR / path.name,
+        ]
+        for candidate in candidates:
+            if candidate.exists():
+                path = candidate
+                break
+
+    return pd.read_parquet(path, engine='pyarrow')
 
 
 def create_column_mapping(columns_meta: list[ColumnMeta]) -> dict[str, str]:

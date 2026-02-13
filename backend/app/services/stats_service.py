@@ -14,6 +14,19 @@ from app.schemas.schemas import (
 from app.services.data_service import apply_filters
 
 
+def _safe_round(value, decimals: int = 4):
+    """Round numeric values and drop non-finite results to keep JSON-safe payloads."""
+    if value is None:
+        return None
+    try:
+        numeric_value = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not np.isfinite(numeric_value):
+        return None
+    return round(numeric_value, decimals)
+
+
 def _normalize_group_value(value):
     """
     Normalize categorical labels used for grouping.
@@ -135,38 +148,35 @@ def calculate_column_stats(
             missing_pct=missing_pct, group_pct=group_pct,
         )
 
-    def r4(v):
-        return round(v, 4) if v is not None else None
-
     return ColumnStats(
         col_key=col_key,
         name=col_name,
         count=total_count,
         missing_count=missing_count,
-        mean=r4(mean_val),
-        median=r4(median_val),
-        mode=r4(mode_val),
-        std=r4(std_val),
-        variance=r4(var_val),
-        min=r4(min_val),
-        max=r4(max_val),
-        q1=r4(q1_val),
-        q3=r4(q3_val),
-        iqr=r4(iqr_val),
-        sem=r4(sem_val),
-        cv=r4(cv_val),
-        range=r4(range_val),
-        p5=r4(p5_val),
-        p10=r4(p10_val),
-        p90=r4(p90_val),
-        p95=r4(p95_val),
-        skewness=r4(skewness_val),
-        kurtosis=r4(kurtosis_val),
-        ci_lower=r4(ci_lower_val),
-        ci_upper=r4(ci_upper_val),
-        sum=r4(sum_val),
-        missing_pct=missing_pct,
-        group_pct=group_pct,
+        mean=_safe_round(mean_val),
+        median=_safe_round(median_val),
+        mode=_safe_round(mode_val),
+        std=_safe_round(std_val),
+        variance=_safe_round(var_val),
+        min=_safe_round(min_val),
+        max=_safe_round(max_val),
+        q1=_safe_round(q1_val),
+        q3=_safe_round(q3_val),
+        iqr=_safe_round(iqr_val),
+        sem=_safe_round(sem_val),
+        cv=_safe_round(cv_val),
+        range=_safe_round(range_val),
+        p5=_safe_round(p5_val),
+        p10=_safe_round(p10_val),
+        p90=_safe_round(p90_val),
+        p95=_safe_round(p95_val),
+        skewness=_safe_round(skewness_val),
+        kurtosis=_safe_round(kurtosis_val),
+        ci_lower=_safe_round(ci_lower_val),
+        ci_upper=_safe_round(ci_upper_val),
+        sum=_safe_round(sum_val),
+        missing_pct=_safe_round(missing_pct, 2),
+        group_pct=_safe_round(group_pct, 2),
     )
 
 
@@ -336,16 +346,22 @@ def compare_groups(
             if not is_normal:
                 interpretation += " Teste nao-parametrico utilizado (normalidade nao atendida)."
 
+            statistic_value = _safe_round(stat_val, 4)
+            p_value = _safe_round(p_val, 6)
+            effect_size_value = _safe_round(effect_val, 4) if effect_val is not None else None
+            if statistic_value is None or p_value is None:
+                continue
+
             results.append(GroupComparisonTest(
                 variable=var,
                 variable_name=var_name,
                 test_name=test_name,
                 test_name_display=test_display,
-                statistic=round(float(stat_val), 4),
-                p_value=round(float(p_val), 6),
+                statistic=statistic_value,
+                p_value=p_value,
                 significant=significant,
                 alpha=alpha,
-                effect_size=effect_val,
+                effect_size=effect_size_value,
                 effect_size_name=effect_name,
                 effect_size_interpretation=effect_interp,
                 interpretation=interpretation,
@@ -368,7 +384,7 @@ def calculate_descriptive_stats(
     confidence_level: float = 0.95,
     run_comparison_tests: bool = False,
     sort_groups_by: str = None,
-    max_groups: int = 50,
+    max_groups: int = 200,
 ) -> tuple[int, list[ColumnStats], Optional[dict[str, list[ColumnStats]]], Optional[list[GroupSummary]], Optional[list[GroupComparisonTest]], Optional[int]]:
     """
     Calculate descriptive statistics for selected variables.

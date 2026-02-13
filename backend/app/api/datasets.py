@@ -96,7 +96,7 @@ async def upload_dataset(
         parquet_path = save_parquet(df_keyed, db_dataset.id)
         
         # Update parquet path
-        db_dataset.parquet_path = str(parquet_path)
+        db_dataset.parquet_path = parquet_path.as_posix()
         db.commit()
         
         # Log upload activity
@@ -264,4 +264,3 @@ def delete_dataset(request: Request, dataset_id: int, db: Session = Depends(get_
     db.commit()
     
     return {"message": "Dataset deleted", "id": dataset_id}
-

@@ -33,6 +33,7 @@ interface SavedDescriptiveAnalysis {
         selectedStats: string[];
         runComparisonTests: boolean;
         treatMissingAsZero: boolean;
+        applyGroupFilters: boolean;
     };
 }
 
@@ -60,6 +61,8 @@ export function EstatisticasPage() {
     const [loadingChart, setLoadingChart] = useState(false);
     const [exportingExcel, setExportingExcel] = useState(false);
     const [savedAnalyses, setSavedAnalyses] = useState<SavedDescriptiveAnalysis[]>([]);
+    const [applyGroupFilters, setApplyGroupFilters] = useState(false);
+    const [statsError, setStatsError] = useState<string | null>(null);
 
     const discreteColumns = currentDataset?.columns.filter(
         (c) => c.var_type === 'categorical' || c.var_type === 'discrete'
@@ -81,6 +84,8 @@ export function EstatisticasPage() {
 
     useEffect(() => {
         setSavedAnalyses([]);
+        setApplyGroupFilters(false);
+        setStatsError(null);
     }, [currentDataset?.id]);
 
     // Auto-calculate when variables change
@@ -93,7 +98,7 @@ export function EstatisticasPage() {
         } else if (activeTab === 'descritivas') {
             setResult(null);
         }
-    }, [statsVariables, statsGroupBy, filters, treatMissingAsZero, currentDataset?.id, selectedStats, runComparisonTests]);
+    }, [statsVariables, statsGroupBy, filters, treatMissingAsZero, currentDataset?.id, selectedStats, runComparisonTests, applyGroupFilters]);
 
     async function loadUniqueValuesForColumn(colKey: string) {
         if (!currentDataset || filterValues[colKey] || loadingValues.has(colKey)) return;
@@ -117,20 +122,34 @@ export function EstatisticasPage() {
         if (!currentDataset || statsVariables.length === 0) return;
 
         setLoading(true);
+        setStatsError(null);
         try {
+            const effectiveFilters = getEffectiveFilters();
             const response = await getDescriptiveStats({
                 dataset_id: currentDataset.id,
-                filters,
+                filters: effectiveFilters,
                 variables: statsVariables,
                 group_by: statsGroupBy,
                 treat_missing_as_zero: treatMissingAsZero,
                 selected_stats: selectedStats,
                 run_comparison_tests: runComparisonTests && statsGroupBy.length > 0,
                 confidence_level: 0.95,
+                max_groups: 200,
             });
             setResult(response);
         } catch (e) {
             console.error('Failed to calculate stats:', e);
+            setResult(null);
+            const err = e as { response?: { data?: { detail?: string } } };
+            const detail = err.response?.data?.detail;
+            const fallbackMsg = e instanceof Error ? e.message : '';
+            setStatsError(
+                detail
+                    ? `Falha ao calcular estatisticas: ${detail}`
+                    : fallbackMsg
+                        ? `Falha ao calcular estatisticas: ${fallbackMsg}`
+                        : 'Falha ao calcular estatisticas. Verifique os filtros e tente novamente.'
+            );
         } finally {
             setLoading(false);
         }
@@ -142,12 +161,14 @@ export function EstatisticasPage() {
         setLoadingChart(true);
         setChartVariable(variable);
         try {
+            const effectiveFilters = getEffectiveFilters();
             const resp = await getChartData({
                 dataset_id: currentDataset.id,
-                filters,
+                filters: effectiveFilters,
                 variable,
                 group_by: statsGroupBy[0],
                 treat_missing_as_zero: treatMissingAsZero,
+                max_groups: 200,
             });
             setChartData(resp);
         } catch (e) {
@@ -169,9 +190,10 @@ export function EstatisticasPage() {
                 }
             }
 
+            const effectiveFilters = getEffectiveFilters();
             const blob = await exportStatsExcel({
                 dataset_id: currentDataset.id,
-                filters,
+                filters: effectiveFilters,
                 variables: statsVariables,
                 group_by: statsGroupBy,
                 treat_missing_as_zero: treatMissingAsZero,
@@ -257,6 +279,58 @@ export function EstatisticasPage() {
         return `${labels.slice(0, maxItems).join(', ')} +${labels.length - maxItems}`;
     }
 
+    function findColumnKey(candidates: string[]) {
+        if (!currentDataset) return '';
+        for (const c of candidates) {
+            if (currentDataset.columns.some(col => col.col_key === c)) {
+                return c;
+            }
+        }
+        return '';
+    }
+
+    function findFamilyGroupKey() {
+        const exact = discreteColumns.find(c => c.col_key === 'familia');
+        if (exact) return exact.col_key;
+        const guess = discreteColumns.find(c => c.col_key.includes('famil'));
+        return guess?.col_key || '';
+    }
+
+    function applyFamilyPreset(variableCandidates: string[], statsPreset: keyof typeof STAT_PRESETS = 'industrial') {
+        const variableKey = findColumnKey(variableCandidates);
+        const familyKey = findFamilyGroupKey();
+
+        if (!variableKey || !familyKey) {
+            setStatsError('Preset indisponivel para este dataset (variavel ou coluna de familia nao encontrada).');
+            return;
+        }
+
+        setStatsError(null);
+        setChartData(null);
+        setChartVariable('');
+        setStatsVariables([variableKey]);
+        setStatsGroupBy([familyKey]);
+        setSelectedStats([...STAT_PRESETS[statsPreset].stats]);
+        setRunComparisonTests(true);
+        setApplyGroupFilters(false);
+    }
+
+    function getEffectiveFilters() {
+        if (statsGroupBy.length === 0 || applyGroupFilters) {
+            return filters;
+        }
+        const groupedColumns = new Set(statsGroupBy);
+        return filters.filter(f => !groupedColumns.has(f.col_key));
+    }
+
+    function getIgnoredGroupFilters() {
+        if (statsGroupBy.length === 0 || applyGroupFilters) {
+            return [] as FilterCondition[];
+        }
+        const groupedColumns = new Set(statsGroupBy);
+        return filters.filter(f => groupedColumns.has(f.col_key));
+    }
+
     function getGroupMean(groupKey: string, variableKey: string): number | null {
         if (!result?.grouped_statistics) return null;
         const groupStats = result.grouped_statistics[groupKey];
@@ -279,6 +353,7 @@ export function EstatisticasPage() {
                 selectedStats: [...selectedStats],
                 runComparisonTests,
                 treatMissingAsZero,
+                applyGroupFilters,
             },
         };
         setSavedAnalyses(prev => [snapshot, ...prev]);
@@ -292,6 +367,7 @@ export function EstatisticasPage() {
         setSelectedStats([...analysis.config.selectedStats]);
         setRunComparisonTests(analysis.config.runComparisonTests);
         setTreatMissingAsZero(analysis.config.treatMissingAsZero);
+        setApplyGroupFilters(analysis.config.applyGroupFilters ?? false);
         setResult(analysis.result);
         setActiveTab('descritivas');
     }
@@ -304,6 +380,8 @@ export function EstatisticasPage() {
     const visibleStatKeys = selectedStats.filter(k => STAT_TOOLTIPS[k]);
     const primaryGroupedVariable = statsVariables[0] || '';
     const primaryGroupedVariableName = primaryGroupedVariable ? getColumnDisplayName(primaryGroupedVariable) : '';
+    const ignoredGroupFilters = getIgnoredGroupFilters();
+    const ignoredGroupFilterNames = ignoredGroupFilters.map(f => getColumnDisplayName(f.col_key));
 
     if (!currentDataset) {
         return (
@@ -351,6 +429,37 @@ export function EstatisticasPage() {
 
                         {/* Stat Selector */}
                         <StatSelectorPanel selectedStats={selectedStats} onChangeStats={setSelectedStats} />
+
+                        {/* Analysis Presets */}
+                        <div className="glass-card p-4">
+                            <div className="flex items-center justify-between mb-3">
+                                <h3 className="font-semibold text-sm">Presets de Analise</h3>
+                                <span className="text-xs text-muted">1 clique</span>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                <button
+                                    className="btn btn-secondary text-xs py-1 px-3"
+                                    onClick={() => applyFamilyPreset(['peso_liq_it', 'peso_brt_it', 'peso_conj'], 'industrial')}
+                                >
+                                    Peso x Familia
+                                </button>
+                                <button
+                                    className="btn btn-secondary text-xs py-1 px-3"
+                                    onClick={() => applyFamilyPreset(['custo_item', 'custo_bruto'], 'industrial')}
+                                >
+                                    Custo x Familia
+                                </button>
+                                <button
+                                    className="btn btn-secondary text-xs py-1 px-3"
+                                    onClick={() => applyFamilyPreset(['rend_metal'], 'spss')}
+                                >
+                                    Rendimento x Familia
+                                </button>
+                            </div>
+                            <p className="text-xs text-muted mt-2">
+                                O preset marca variavel, agrupa por familia, ativa testes comparativos e desliga filtro da coluna agrupada.
+                            </p>
+                        </div>
 
                         {/* Treatment Option */}
                         <div className="glass-card p-4">
@@ -470,6 +579,24 @@ export function EstatisticasPage() {
                                 </label>
                             )}
 
+                            {statsGroupBy.length > 0 && (
+                                <label className="flex items-center gap-2 cursor-pointer mb-3 p-2 rounded bg-[var(--color-surface)]">
+                                    <input
+                                        type="checkbox"
+                                        checked={applyGroupFilters}
+                                        onChange={(e) => setApplyGroupFilters(e.target.checked)}
+                                        className="w-4 h-4 accent-[var(--color-primary)]"
+                                    />
+                                    <span className="text-xs">Aplicar filtro da coluna agrupada (pode reduzir para 1 grupo)</span>
+                                </label>
+                            )}
+
+                            {statsGroupBy.length > 0 && !applyGroupFilters && ignoredGroupFilters.length > 0 && (
+                                <p className="text-xs text-warning mb-3">
+                                    Filtros ignorados para comparar todos os grupos: {ignoredGroupFilterNames.join(', ')}
+                                </p>
+                            )}
+
                             <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
                                 {discreteColumns.map((col) => {
                                     const isSelected = statsGroupBy.includes(col.col_key);
@@ -509,6 +636,11 @@ export function EstatisticasPage() {
                                                 Amostra: {result.sample_size.toLocaleString()} registros
                                                 {result.total_groups && result.total_groups > 0 && ` | ${result.total_groups} grupos`}
                                             </p>
+                                            {statsGroupBy.length > 0 && !applyGroupFilters && ignoredGroupFilters.length > 0 && (
+                                                <p className="text-xs text-warning mt-1">
+                                                    Comparacao por grupo usando filtros sem {ignoredGroupFilterNames.join(', ')}.
+                                                </p>
+                                            )}
                                         </div>
                                         <div className="flex gap-2">
                                             <button className="btn btn-secondary text-sm" onClick={saveCurrentAnalysis}>
@@ -738,6 +870,11 @@ export function EstatisticasPage() {
                                                             <div className="text-xs text-secondary mt-1">
                                                                 Agrupamento: {analysis.config.groupBy.length > 0 ? formatColumnList(analysis.config.groupBy) : 'Sem agrupamento'}
                                                             </div>
+                                                            {analysis.config.groupBy.length > 0 && (
+                                                                <div className="text-xs text-secondary mt-1">
+                                                                    Filtro da coluna agrupada: {analysis.config.applyGroupFilters ? 'Aplicado' : 'Ignorado'}
+                                                                </div>
+                                                            )}
                                                         </div>
                                                         <div className="flex gap-2 shrink-0">
                                                             <button className="btn btn-secondary text-xs" onClick={() => openSavedAnalysis(analysis)}>
@@ -776,6 +913,12 @@ export function EstatisticasPage() {
                                         </div>
                                     </div>
                                 )}
+                            </div>
+                        )}
+
+                        {!result && statsError && (
+                            <div className="glass-card p-4 mb-4">
+                                <p className="text-sm text-error">{statsError}</p>
                             </div>
                         )}
 

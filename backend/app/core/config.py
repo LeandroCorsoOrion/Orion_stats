@@ -4,6 +4,8 @@ Orion Stats - Configuration Settings
 from pydantic_settings import BaseSettings
 from pathlib import Path
 
+BASE_DIR = Path(__file__).resolve().parents[2]  # backend/
+
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
@@ -21,11 +23,11 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list[str] = ["http://localhost:5555", "http://localhost:5173", "http://localhost:3000"]
     
     # Database
-    DATABASE_URL: str = "sqlite:///./orion_stats.db"
+    DATABASE_URL: str = f"sqlite:///{(BASE_DIR / 'orion_stats.db').as_posix()}"
     
     # File Storage
-    DATA_DIR: Path = Path("./data")
-    MODELS_DIR: Path = Path("./models")
+    DATA_DIR: Path = BASE_DIR / "data"
+    MODELS_DIR: Path = BASE_DIR / "models"
     MAX_UPLOAD_SIZE_MB: int = 100
     
     # Data Processing
