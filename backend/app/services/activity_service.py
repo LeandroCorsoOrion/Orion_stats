@@ -1,5 +1,5 @@
 """
-Orion Stats - Activity Logging Service
+Orion Analytics - Activity Logging Service
 """
 from datetime import datetime
 from typing import Optional

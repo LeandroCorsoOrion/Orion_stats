@@ -1,5 +1,5 @@
 """
-Orion Stats - Normality Service
+Orion Analytics - Normality Service
 Tests normality of distributions using Shapiro-Wilk, Kolmogorov-Smirnov, and D'Agostino.
 """
 import pandas as pd

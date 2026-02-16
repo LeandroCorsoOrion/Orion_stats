@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Loader2, Grid3X3, CheckCircle2, XCircle, PlusCircle } from 'lucide-react';
 import { getCrosstab } from '@/lib/api';
+import { AskOrionButton } from '@/components/AskOrionButton';
 import type { CrosstabResponse, FilterCondition, ColumnMeta, ReportSection } from '@/types';
 import { buildCrosstabSection } from '@/lib/reportSections';
 
@@ -52,10 +53,13 @@ export function CrosstabTab({ datasetId, filters, discreteColumns, treatMissingA
     return (
         <div>
             <div className="glass-card p-4 mb-4">
-                <h4 className="font-semibold mb-3 flex items-center gap-2">
-                    <Grid3X3 size={16} className="text-primary" />
-                    Tabela Cruzada (Crosstab)
-                </h4>
+                <div className="flex items-center justify-between mb-3">
+                    <h4 className="font-semibold flex items-center gap-2">
+                        <Grid3X3 size={16} className="text-primary" />
+                        Tabela Cruzada (Crosstab)
+                    </h4>
+                    <AskOrionButton topicId="chi_square_independence" />
+                </div>
                 <p className="text-xs text-muted mb-3">Cruza duas variaveis categoricas e testa associacao (Qui-Quadrado).</p>
                 <div className="grid grid-cols-2 gap-4 mb-3">
                     <div>
@@ -133,12 +137,34 @@ export function CrosstabTab({ datasetId, filters, discreteColumns, treatMissingA
                                 ) : (
                                     <XCircle size={16} className="text-muted" />
                                 )}
-                                <span className="font-medium">Teste Qui-Quadrado</span>
+                                <span className="font-medium flex items-center gap-2">
+                                    Teste Qui-Quadrado
+                                    <AskOrionButton topicId="chi_square_independence" />
+                                </span>
                             </div>
                             <div className="grid grid-cols-3 gap-3 mb-2">
-                                <div><span className="text-xs text-muted">X²</span><div className="text-sm">{result.chi_square.toFixed(2)}</div></div>
-                                <div><span className="text-xs text-muted">p-valor</span><div className="text-sm">{result.chi_square_p_value != null && result.chi_square_p_value < 0.001 ? '< 0.001' : result.chi_square_p_value?.toFixed(4)}</div></div>
-                                {result.cramers_v != null && <div><span className="text-xs text-muted">V de Cramer</span><div className="text-sm">{result.cramers_v.toFixed(3)}</div></div>}
+                                <div>
+                                    <span className="text-xs text-muted flex items-center gap-2">
+                                        X² <AskOrionButton topicId="test_statistic" />
+                                    </span>
+                                    <div className="text-sm">{result.chi_square.toFixed(2)}</div>
+                                </div>
+                                <div>
+                                    <span className="text-xs text-muted flex items-center gap-2">
+                                        p-valor <AskOrionButton topicId="p_value" />
+                                    </span>
+                                    <div className="text-sm">
+                                        {result.chi_square_p_value != null && result.chi_square_p_value < 0.001 ? '< 0.001' : result.chi_square_p_value?.toFixed(4)}
+                                    </div>
+                                </div>
+                                {result.cramers_v != null && (
+                                    <div>
+                                        <span className="text-xs text-muted flex items-center gap-2">
+                                            V de Cramer <AskOrionButton topicId="cramers_v" />
+                                        </span>
+                                        <div className="text-sm">{result.cramers_v.toFixed(3)}</div>
+                                    </div>
+                                )}
                             </div>
                             {result.interpretation && <p className="text-xs text-secondary">{result.interpretation}</p>}
                         </div>

@@ -1,7 +1,7 @@
 """
-Orion Stats - Database Models
+Orion Analytics - Database Models
 """
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, JSON, Float
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -24,6 +24,7 @@ class Dataset(Base):
     
     # Relationships
     scenarios = relationship("Scenario", back_populates="dataset", cascade="all, delete-orphan")
+    projects = relationship("Project", back_populates="dataset", cascade="all, delete-orphan")
 
 
 class Scenario(Base):
@@ -40,6 +41,55 @@ class Scenario(Base):
     
     # Relationships
     dataset = relationship("Dataset", back_populates="scenarios")
+
+
+class Project(Base):
+    """Operational project (MLOps-ready artifact)."""
+    __tablename__ = "projects"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+
+    dataset_id = Column(Integer, ForeignKey("datasets.id"), nullable=False)
+    model_id = Column(String(64), nullable=False)  # UUID folder in backend/models/
+    model_label = Column(String(255), nullable=False)  # Human label (confidential mapping on server)
+
+    target = Column(String(255), nullable=False)  # col_key
+    features = Column(JSON, nullable=False)  # list[col_key]
+
+    # What the client needs to provide to run predictions (derived from training config + metadata)
+    input_schema = Column(JSON, nullable=False)  # list[{col_key,name,var_type,input_type,allowed_values,...}]
+
+    # Reproducibility and governance
+    train_config = Column(JSON, nullable=False)  # {filters, selection_metric, treat_missing_as_zero, ...}
+    model_metrics = Column(JSON, nullable=False)  # {label: {r2, rmse, mae, mape}}
+
+    status = Column(String(32), nullable=False, default="active")  # draft|active|archived
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    dataset = relationship("Dataset", back_populates="projects")
+    runs = relationship("ProjectRun", back_populates="project", cascade="all, delete-orphan")
+
+
+class ProjectRun(Base):
+    """Single prediction execution for a project (audit/history)."""
+    __tablename__ = "project_runs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
+
+    input_values = Column(JSON, nullable=False)
+    predicted_value = Column(Float, nullable=False)
+    model_used = Column(String(255), nullable=False)
+    expected_error = Column(Float, nullable=False)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    project = relationship("Project", back_populates="runs")
 
 
 class ActivityLog(Base):

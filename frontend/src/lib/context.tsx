@@ -1,4 +1,4 @@
-// Orion Stats - App Context
+// Orion Analytics - App Context
 
 import { createContext, useContext, useState } from 'react';
 import type { Dispatch, ReactNode, SetStateAction } from 'react';

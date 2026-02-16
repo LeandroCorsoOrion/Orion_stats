@@ -3,28 +3,37 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./backend/data:/app/data
-      - ./backend/models:/app/models
-      - orion-db:/app
+    expose:
+      - "8000"
     environment:
       - DEBUG=false
-      - CORS_ORIGINS=["http://localhost:5173","http://localhost:3000"]
+      - HOST=0.0.0.0
+      - PORT=8000
+      - DATABASE_URL=sqlite:////app/data/orion_analytics.db
+      # When behind Nginx (/api), the browser is same-origin, so CORS rarely matters.
+      - CORS_ORIGINS=["http://localhost","http://127.0.0.1"]
+    volumes:
+      - orion-data:/app/data
+      - orion-models:/app/models
     restart: unless-stopped
 
-  frontend:
+  web:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: deploy/ec2/nginx/Dockerfile
     ports:
-      - "5173:5173"
+      - "${ORION_WEB_PORT:-80}:80"
     depends_on:
       - backend
+    # Password must live in a TXT file on the host (requested). This mount makes it persistent.
+    volumes:
+      - ./secrets:/run/secrets
     environment:
-      - VITE_API_URL=http://localhost:8000
+      - ORION_AUTH_USER=${ORION_AUTH_USER:-orion}
+      - ORION_AUTH_PASSWORD_FILE=${ORION_AUTH_PASSWORD_FILE:-/run/secrets/orion_password.txt}
     restart: unless-stopped
 
 volumes:
-  orion-db:
+  orion-data:
+  orion-models:
+

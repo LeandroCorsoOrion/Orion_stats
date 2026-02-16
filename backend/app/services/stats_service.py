@@ -1,5 +1,5 @@
 """
-Orion Stats - Statistics Service
+Orion Analytics - Statistics Service
 Calculates descriptive statistics, correlation, and group comparisons.
 """
 import math
@@ -70,6 +70,102 @@ def _safe_group_mean_for_sort(group_df: pd.DataFrame, variable: str) -> float:
     if numeric.notna().sum() == 0:
         return float("-inf")
     return float(numeric.mean())
+
+
+def _build_group_practical_explanation(
+    variable_name: str,
+    significant: bool,
+    effect_interp: Optional[str],
+    is_normal: bool,
+    group_labels: list[str],
+    group_data: list[np.ndarray],
+) -> str:
+    """
+    Build a plain-language explanation focused on practical action.
+    """
+    if len(group_data) < 2 or len(group_labels) < 2:
+        return (
+            f"Na pratica, ainda nao ha grupos suficientes para explicar o impacto de {variable_name} "
+            "com seguranca."
+        )
+
+    center_label = "media" if is_normal else "mediana"
+    centers = [
+        float(np.mean(values)) if is_normal else float(np.median(values))
+        for values in group_data
+    ]
+
+    top_idx = int(np.argmax(centers))
+    bottom_idx = int(np.argmin(centers))
+    top_group = str(group_labels[top_idx])
+    bottom_group = str(group_labels[bottom_idx])
+    top_center = centers[top_idx]
+    bottom_center = centers[bottom_idx]
+    delta = top_center - bottom_center
+
+    def _fmt_num(value: float) -> str:
+        rounded = _safe_round(value, 2)
+        return f"{rounded:.2f}" if rounded is not None else "-"
+
+    top_text = _fmt_num(top_center)
+    bottom_text = _fmt_num(bottom_center)
+    delta_text = _fmt_num(delta)
+
+    if significant:
+        if effect_interp in {"grande", "medio"}:
+            intro = (
+                f"Na pratica, os grupos realmente se comportam de forma diferente em {variable_name}. "
+                f"O impacto foi classificado como {effect_interp}."
+            )
+            action = (
+                f" Priorize investigar por que o grupo '{top_group}' esta melhor que '{bottom_group}' "
+                "e teste replicar essa pratica."
+            )
+        elif effect_interp == "pequeno":
+            intro = (
+                f"Na pratica, existe diferenca em {variable_name}, mas o impacto tende a ser pequeno."
+            )
+            action = (
+                " Use esse resultado como apoio e valide com custo, processo e metas antes de mudar operacao."
+            )
+        else:
+            intro = (
+                f"Na pratica, a diferenca em {variable_name} foi detectada, mas e muito pequena."
+            )
+            action = (
+                " Evite decidir apenas com este teste; combine com indicadores de negocio."
+            )
+    else:
+        intro = (
+            f"Na pratica, com os dados atuais, os grupos estao parecidos em {variable_name}."
+        )
+        action = (
+            " Nao ha sinal forte para tratar grupos de forma diferente agora; continue monitorando."
+        )
+
+    if top_group == bottom_group or abs(delta) < 1e-12:
+        group_context = f" As {center_label}s dos grupos ficaram muito proximas."
+    else:
+        group_context = (
+            f" Referencia rapida: maior {center_label} no grupo '{top_group}' ({top_text}) e "
+            f"menor no grupo '{bottom_group}' ({bottom_text}), diferenca aproximada de {delta_text}."
+        )
+
+    normality_note = ""
+    if not is_normal:
+        normality_note = (
+            " Como os dados nao atenderam normalidade, a comparacao foi feita por ranking "
+            "(mais robusta para outliers)."
+        )
+
+    sample_sizes = [len(values) for values in group_data]
+    sample_note = ""
+    if sample_sizes and min(sample_sizes) < 10:
+        sample_note = (
+            " Pelo menos um grupo tem poucos registros; confirme com mais dados antes de uma decisao definitiva."
+        )
+
+    return f"{intro}{group_context}{action}{normality_note}{sample_note}"
 
 
 def calculate_column_stats(
@@ -215,6 +311,7 @@ def compare_groups(
         try:
             # Collect group data
             group_data = []
+            valid_group_keys = []
             for key in group_keys:
                 g = groups.get_group(key)[var].copy()
                 if treat_missing_as_zero:
@@ -224,6 +321,7 @@ def compare_groups(
                 g = pd.to_numeric(g, errors='coerce').dropna()
                 if len(g) >= 2:
                     group_data.append(g.values)
+                    valid_group_keys.append(str(key))
 
             if len(group_data) < 2:
                 continue
@@ -318,7 +416,7 @@ def compare_groups(
                 ss_total = np.sum((all_data - grand_mean) ** 2)
                 eta_sq = ss_between / ss_total if ss_total > 0 else 0
                 effect_val = round(eta_sq, 4)
-                effect_name = "eta²"
+                effect_name = "eta2"
                 if eta_sq < 0.01:
                     effect_interp = "negligivel"
                 elif eta_sq < 0.06:
@@ -346,6 +444,15 @@ def compare_groups(
             if not is_normal:
                 interpretation += " Teste nao-parametrico utilizado (normalidade nao atendida)."
 
+            practical_explanation = _build_group_practical_explanation(
+                variable_name=var_name,
+                significant=significant,
+                effect_interp=effect_interp,
+                is_normal=is_normal,
+                group_labels=valid_group_keys,
+                group_data=group_data,
+            )
+
             statistic_value = _safe_round(stat_val, 4)
             p_value = _safe_round(p_val, 6)
             effect_size_value = _safe_round(effect_val, 4) if effect_val is not None else None
@@ -365,6 +472,7 @@ def compare_groups(
                 effect_size_name=effect_name,
                 effect_size_interpretation=effect_interp,
                 interpretation=interpretation,
+                practical_explanation=practical_explanation,
                 assumptions_met=assumptions,
             ))
 

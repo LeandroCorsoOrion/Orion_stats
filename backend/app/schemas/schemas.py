@@ -1,6 +1,7 @@
 """
-Orion Stats - Pydantic Schemas
+Orion Analytics - Pydantic Schemas
 """
+from enum import Enum
 from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Optional, Any
@@ -156,6 +157,7 @@ class GroupComparisonTest(BaseModel):
     effect_size_name: Optional[str] = None
     effect_size_interpretation: Optional[str] = None
     interpretation: str
+    practical_explanation: Optional[str] = None
     assumptions_met: dict[str, bool] = {}
 
 
@@ -460,6 +462,121 @@ class ScenarioResponse(BaseModel):
 class ScenarioList(BaseModel):
     """List of scenarios."""
     scenarios: list[ScenarioResponse]
+
+
+# ---------- Project (Operationalization) Schemas ----------
+
+class ProjectStatus(str, Enum):
+    """Project lifecycle status."""
+    draft = "draft"
+    active = "active"
+    archived = "archived"
+
+
+class ProjectInputField(BaseModel):
+    """A single input field required to run predictions for a project."""
+    col_key: str
+    name: str
+    var_type: str  # 'categorical', 'discrete', 'continuous'
+    input_type: str  # 'number' | 'select'
+    required: bool = False
+    default_value: Optional[Any] = None
+    allowed_values: Optional[list[Any]] = None
+    description: Optional[str] = None
+
+
+class ProjectTrainConfig(BaseModel):
+    """Minimal config to reproduce how the project model was trained."""
+    filters: list[FilterCondition] = []
+    selection_metric: str = "rmse"
+    treat_missing_as_zero: bool = True
+
+
+class ProjectCreate(BaseModel):
+    """Create an operational project from an existing trained model artifact."""
+    name: str = Field(..., min_length=2, max_length=255)
+    description: Optional[str] = Field(default=None, max_length=5000)
+    dataset_id: int
+    model_id: str
+    model_label: Optional[str] = None  # If None, uses best_label from metadata
+    target: str
+    features: list[str]
+    train_config: ProjectTrainConfig = Field(default_factory=ProjectTrainConfig)
+    status: ProjectStatus = ProjectStatus.active
+
+
+class ProjectUpdate(BaseModel):
+    """Update a project."""
+    name: Optional[str] = Field(default=None, min_length=2, max_length=255)
+    description: Optional[str] = Field(default=None, max_length=5000)
+    status: Optional[ProjectStatus] = None
+
+
+class ProjectResponse(BaseModel):
+    """Project response."""
+    id: int
+    name: str
+    description: Optional[str]
+    dataset_id: int
+    dataset_name: Optional[str] = None
+    model_id: str
+    model_label: str
+    target: str
+    features: list[str]
+    input_schema: list[ProjectInputField]
+    train_config: ProjectTrainConfig
+    model_metrics: dict[str, Any]
+    status: ProjectStatus
+    created_at: datetime
+    updated_at: datetime
+
+
+class ProjectSummary(BaseModel):
+    """Project summary for lists."""
+    id: int
+    name: str
+    dataset_id: int
+    dataset_name: Optional[str] = None
+    model_label: str
+    target: str
+    status: ProjectStatus
+    created_at: datetime
+    updated_at: datetime
+
+
+class ProjectList(BaseModel):
+    """List of projects."""
+    projects: list[ProjectSummary]
+    total: int
+
+
+class ProjectPredictRequest(BaseModel):
+    """Run a project prediction."""
+    input_values: dict[str, Any]  # {col_key: value}
+
+
+class ProjectPredictResponse(BaseModel):
+    """Project prediction result."""
+    predicted_value: float
+    model_used: str
+    expected_error: float
+
+
+class ProjectRunResponse(BaseModel):
+    """A single execution of a project prediction (history/audit)."""
+    id: int
+    project_id: int
+    input_values: dict[str, Any]
+    predicted_value: float
+    model_used: str
+    expected_error: float
+    created_at: datetime
+
+
+class ProjectRunList(BaseModel):
+    """List of project runs."""
+    runs: list[ProjectRunResponse]
+    total: int
 
 
 # ---------- Activity Log Schemas ----------

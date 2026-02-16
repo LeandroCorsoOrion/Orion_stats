@@ -1,5 +1,5 @@
 """
-Orion Stats - Correlation API Endpoints
+Orion Analytics - Correlation API Endpoints
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session

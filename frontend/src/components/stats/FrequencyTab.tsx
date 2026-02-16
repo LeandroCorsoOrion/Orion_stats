@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Loader2, List } from 'lucide-react';
 import { getFrequencies } from '@/lib/api';
+import { AskOrionButton } from '@/components/AskOrionButton';
 import type { FrequencyResponse, FilterCondition, ColumnMeta } from '@/types';
 
 interface Props {
@@ -35,10 +36,13 @@ export function FrequencyTab({ datasetId, filters, discreteColumns, treatMissing
     return (
         <div>
             <div className="glass-card p-4 mb-4">
-                <h4 className="font-semibold mb-3 flex items-center gap-2">
-                    <List size={16} className="text-primary" />
-                    Tabela de Frequencias
-                </h4>
+                <div className="flex items-center justify-between mb-3">
+                    <h4 className="font-semibold flex items-center gap-2">
+                        <List size={16} className="text-primary" />
+                        Tabela de Frequencias
+                    </h4>
+                    <AskOrionButton topicId="frequency_table" />
+                </div>
                 <p className="text-xs text-muted mb-3">Selecione variaveis categoricas/discretas para ver a distribuicao de valores.</p>
                 <div className="flex flex-wrap gap-2 mb-3">
                     {discreteColumns.map(col => (
@@ -63,9 +67,9 @@ export function FrequencyTab({ datasetId, filters, discreteColumns, treatMissing
                             <thead>
                                 <tr>
                                     <th>Valor</th>
-                                    <th>Frequencia</th>
-                                    <th>%</th>
-                                    <th>% Acumulado</th>
+                                    <th className="flex items-center gap-2">Frequencia <AskOrionButton topicId="frequency_table" /></th>
+                                    <th className="flex items-center gap-2">% <AskOrionButton topicId="frequency_table" /></th>
+                                    <th className="flex items-center gap-2">% Acumulado <AskOrionButton topicId="frequency_table" /></th>
                                     <th style={{ width: '30%' }}>Distribuicao</th>
                                 </tr>
                             </thead>

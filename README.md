@@ -1,134 +1,98 @@
-# Orion Stats
+# Orion Analytics
 
-Plataforma de Análise de Dados com Estatísticas, Correlação e Machine Learning.
+Plataforma de Análise de Dados com Estatísticas, Correlação e Machine Learning, com foco em **Projetos Operacionais**: transformar um modelo treinado em uma aplicação reutilizável (com inputs, endpoint e playground prontos).
 
-![Dark Theme](https://img.shields.io/badge/theme-dark-1a1a2e)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-009688)
-![React](https://img.shields.io/badge/React-18+-61DAFB)
-![Python](https://img.shields.io/badge/Python-3.11+-3776AB)
+## Principais Funcionalidades
 
-## 🚀 Funcionalidades
+- **Upload de XLSX**: carregue planilhas e visualize os dados com paginação
+- **Detecção automática de tipos**: categórica, discreta numérica, contínua
+- **Estatísticas descritivas**: média, mediana, moda, desvio padrão, quartis etc.
+- **Correlação**: matriz (heatmap) com valores anotados
+- **Modelagem**: treino automático de 5 modelos + regressão linear (equação e coeficientes)
+- **Simulação**: formulário de inputs para previsão
+- **Cenários**: salve e reutilize configurações de análise
+- **Projetos (Operacionalização)**: transforme um treino em um “projeto de aplicação”:
+  - inputs gerados a partir das *features (X)* do treino (o que você treina é o que você usa depois)
+  - endpoint de previsão por projeto (`/projects/{id}/predict`)
+  - configuração salva (dataset, Y, X, filtros, métrica, missing)
+  - status (ativo/rascunho/arquivado)
 
-- **Upload de XLSX**: Carregue planilhas e visualize dados com paginação
-- **Detecção automática de tipos**: Categórica, discreta numérica, contínua
-- **Estatísticas descritivas**: Média, mediana, moda, desvio padrão, quartis, etc.
-- **Correlação de Pearson**: Heatmap interativo com valores anotados
-- **5 Modelos de ML**: Treinamento automático e comparação de métricas
-- **Regressão Linear**: Equação e coeficientes com statsmodels
-- **Simulação**: Previsão de valores com o melhor modelo
-- **Cenários**: Salve e reutilize configurações de análise
-
-## 📦 Requisitos
+## Requisitos
 
 - Docker e Docker Compose **OU**
 - Python 3.11+ e Node.js 20+
 
-## 🏃 Execução
+## Execução
 
 ### Com Docker (recomendado)
 
 ```bash
-cd orion-stats
+cd orion-analytics
+mkdir -p secrets
+# Defina a senha (Basic Auth) em um TXT no host:
+printf "%s\n" "SUA_SENHA_FORTE_AQUI" > secrets/orion_password.txt
 docker-compose up --build
 ```
 
 Acesse:
-- Frontend: http://localhost:5173
-- Backend API: http://localhost:8000
-- Swagger Docs: http://localhost:8000/docs
+- App: http://localhost
+- Backend API: http://localhost/api
+- Swagger Docs: http://localhost/api/docs
 
-### Desenvolvimento Local
+Login (Basic Auth):
+- Usuario: `orion` (padrao)
+- Senha: conteudo de `secrets/orion_password.txt`
 
-#### Backend
+Obs: se `secrets/orion_password.txt` nao existir, o container `web` vai gerar uma senha automaticamente e salvar nesse arquivo.
 
-```bash
-cd backend
+### Desenvolvimento Local (Windows)
 
-# Criar ambiente virtual
-python -m venv venv
-venv\Scripts\activate  # Windows
-# source venv/bin/activate  # Linux/Mac
+Você pode usar o `START.bat`, que agora faz auto-setup:
+- verifica Python e Node.js/npm;
+- tenta instalar automaticamente com `winget` se faltar;
+- cria/atualiza o `backend\.venv`;
+- instala dependências do backend e frontend;
+- abre backend e frontend em janelas separadas.
 
-# Instalar dependências
-pip install -r requirements.txt
+Comando:
 
-# Executar
-uvicorn app.main:app --reload --port 8000
+```bat
+START.bat
 ```
 
-#### Frontend
+Modos úteis:
+- Somente preparar ambiente (sem abrir janelas): `set ORION_SKIP_LAUNCH=1 && START.bat`
+- Não pausar em erro/fim: `set ORION_NO_PAUSE=1 && START.bat`
 
-```bash
-cd frontend
+## Deploy EC2
 
-# Instalar dependências
-npm install
+Guia completo: `docs/EC2_DEPLOY.md`
 
-# Executar
-npm run dev
-```
+## Checklist
 
-## 📖 Como Usar
+Checklist de funcionalidades + pronto para EC2: `docs/CHECKLIST.md`
 
-### 1. Upload de Dataset
+## Troubleshooting (Conexao)
 
-1. Acesse a página **Dataset**
-2. Arraste um arquivo XLSX ou clique para selecionar
-3. Visualize a prévia dos dados
-4. Ajuste os tipos de variáveis se necessário
+Guia rapido para intermitencia de conexao: `docs/TROUBLESHOOTING_CONNECTIVITY.md`
 
-### 2. Estatísticas
+## Como Usar (bem direto)
 
-1. Vá para **Estatísticas**
-2. Selecione filtros nas variáveis discretas
-3. Escolha variáveis contínuas para análise
-4. Opcionalmente agrupe por variáveis
-5. Clique em **Calcular**
+1. **Dataset**
+   - Faça upload do XLSX e confira as colunas/tipos.
+2. **Modelagem e Simulação**
+   - Selecione a variável alvo (Y) e as variáveis explicativas (X).
+   - Clique em **Treinar Modelos** e compare as métricas.
+3. **Transformar em Projeto**
+   - Ainda na página de Modelagem, clique em **Transformar em Projeto**.
+   - Dê um nome e pronto: o projeto fica “operacional” (com inputs e endpoint).
+4. **Projetos**
+   - Abra o projeto para usar o Playground (formulário) ou chamar o endpoint via API.
 
-### 3. Correlação
-
-1. Vá para **Correlação**
-2. Selecione variáveis contínuas (mínimo 2)
-3. Clique em **Calcular Correlação**
-4. Visualize o heatmap com valores
-
-### 4. Modelagem e Simulação
-
-1. Vá para **Modelagem e Simulação**
-2. Selecione a variável alvo (Y) - ex: REND_METAL
-3. Selecione variáveis explicativas (X)
-4. Escolha a métrica de seleção (RMSE, R², MAE)
-5. Clique em **Treinar Modelos**
-6. Compare os 5 modelos:
-   - Machine Learning - Pro
-   - Machine Learning - Alpha
-   - Machine Learning - Sigma
-   - Machine Learning - Delta
-   - Machine Learning - Nova
-7. Use o formulário de simulação para prever valores
-
-### 5. Cenários
-
-1. Vá para **Cenários**
-2. Dê um nome e salve o cenário atual
-3. Carregue cenários salvos para restaurar configurações
-4. Exporte/importe cenários como JSON
-
-## 🧪 Teste com Amostra_Hidro.xlsx
-
-Se disponível, o arquivo `Amostra_Hidro.xlsx` pode ser usado para teste:
-
-1. Faça upload do arquivo
-2. Vá para Modelagem
-3. Selecione `REND_METAL` como alvo
-4. Selecione features como `PESO_LIQ_IT`, `PESO_BRT_IT`, `QTD_CAV`, etc.
-5. Treine os modelos
-6. Simule valores
-
-## 🏗️ Estrutura do Projeto
+## Estrutura do Projeto
 
 ```
-orion-stats/
+orion-analytics/
 ├── backend/
 │   ├── app/
 │   │   ├── api/           # Endpoints FastAPI
@@ -137,7 +101,7 @@ orion-stats/
 │   │   ├── schemas/       # Schemas Pydantic
 │   │   └── core/          # Configurações
 │   ├── data/              # Datasets (parquet)
-│   ├── models/            # Modelos treinados
+│   ├── models/            # Modelos treinados (artefatos)
 │   └── requirements.txt
 ├── frontend/
 │   ├── src/
@@ -150,29 +114,23 @@ orion-stats/
 └── README.md
 ```
 
-## 📡 API Endpoints
+## API Endpoints
 
 | Método | Endpoint | Descrição |
-|--------|----------|-----------|
-| POST | /datasets/upload | Upload de XLSX |
-| GET | /datasets/{id}/meta | Metadados do dataset |
-| POST | /data/query | Consulta filtrada |
-| POST | /stats/descriptive | Estatísticas descritivas |
-| POST | /stats/correlation | Matriz de correlação |
-| POST | /ml/train | Treinar modelos |
-| POST | /ml/predict | Fazer previsão |
-| CRUD | /scenarios | Gerenciar cenários |
+|--------|----------|----------|
+| POST | `/datasets/upload` | Upload de XLSX |
+| GET | `/datasets/{id}/meta` | Metadados do dataset |
+| POST | `/data/query` | Consulta filtrada |
+| POST | `/stats/descriptive` | Estatísticas descritivas |
+| POST | `/stats/correlation` | Matriz de correlação |
+| POST | `/ml/train` | Treinar modelos |
+| POST | `/ml/predict` | Previsão por `model_id` |
+| CRUD | `/scenarios` | Gerenciar cenários |
+| CRUD | `/projects` | Gerenciar projetos operacionais |
+| POST | `/projects/{id}/predict` | Previsão via projeto (operacional) |
 
 Documentação completa: http://localhost:8000/docs
 
-## 🎨 Design System
-
-- **Tema**: Dark com glassmorphism
-- **Cor primária**: #A0D0FF
-- **Fundo**: Gradiente #0d1421 → #17233d
-- **Fonte**: Exo 2 (Google Fonts)
-- **Componentes**: Cards com blur, bordas suaves, sombras discretas
-
-## 📄 Licença
+## Licença
 
 MIT

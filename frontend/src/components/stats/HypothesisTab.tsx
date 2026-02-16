@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Loader2, FlaskConical, CheckCircle2, XCircle } from 'lucide-react';
 import { getHypothesisTest } from '@/lib/api';
+import { AskOrionButton } from '@/components/AskOrionButton';
 import type { HypothesisTestResponse, FilterCondition, ColumnMeta } from '@/types';
 
 const TEST_TYPES = [
@@ -12,6 +13,16 @@ const TEST_TYPES = [
     { value: 'paired_t', label: 'Teste t pareado', desc: 'Compara 2 medicoes relacionadas' },
     { value: 'wilcoxon', label: 'Wilcoxon signed-rank', desc: 'Alternativa nao-parametrica ao t pareado' },
 ];
+
+const TEST_HELP_TOPICS: Record<string, string> = {
+    one_sample_t: 'test_one_sample_t',
+    independent_t: 'test_independent_t',
+    mann_whitney: 'test_mann_whitney',
+    one_way_anova: 'test_one_way_anova',
+    kruskal_wallis: 'test_kruskal_wallis',
+    paired_t: 'test_paired_t',
+    wilcoxon: 'test_wilcoxon',
+};
 
 interface Props {
     datasetId: number;
@@ -53,19 +64,31 @@ export function HypothesisTab({ datasetId, filters, continuousColumns, discreteC
     return (
         <div>
             <div className="glass-card p-4 mb-4">
-                <h4 className="font-semibold mb-3 flex items-center gap-2">
-                    <FlaskConical size={16} className="text-primary" />
-                    Testes de Hipotese
-                </h4>
+                <div className="flex items-center justify-between mb-3">
+                    <h4 className="font-semibold flex items-center gap-2">
+                        <FlaskConical size={16} className="text-primary" />
+                        Testes de Hipotese
+                    </h4>
+                    <AskOrionButton topicId="hypothesis_tests_overview" />
+                </div>
 
                 {/* Step 1: Choose test */}
                 <div className="mb-4">
-                    <label className="label">1. Escolha o teste</label>
+                    <div className="flex items-center justify-between">
+                        <label className="label">1. Escolha o teste</label>
+                        <AskOrionButton topicId="hypothesis_tests_overview" />
+                    </div>
                     <div className="flex flex-col gap-1 max-h-48 overflow-y-auto">
                         {TEST_TYPES.map(t => (
                             <label key={t.value} className={`flex items-center gap-2 p-2 rounded cursor-pointer transition ${testType === t.value ? 'bg-[rgba(160,208,255,0.15)] border border-[var(--color-primary)]' : 'hover:bg-[var(--color-surface)] border border-transparent'}`}>
                                 <input type="radio" name="testType" checked={testType === t.value} onChange={() => setTestType(t.value)} className="accent-[var(--color-primary)]" />
-                                <div><div className="text-sm">{t.label}</div><div className="text-xs text-muted">{t.desc}</div></div>
+                                <div className="flex-1">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <div className="text-sm">{t.label}</div>
+                                        <AskOrionButton topicId={TEST_HELP_TOPICS[t.value] || 'hypothesis_tests_overview'} />
+                                    </div>
+                                    <div className="text-xs text-muted">{t.desc}</div>
+                                </div>
                             </label>
                         ))}
                     </div>
@@ -74,7 +97,10 @@ export function HypothesisTab({ datasetId, filters, continuousColumns, discreteC
                 {/* Step 2: Select variables */}
                 {testType && (
                     <div className="mb-4">
-                        <label className="label">2. Selecione as variaveis</label>
+                        <div className="flex items-center justify-between">
+                            <label className="label">2. Selecione as variaveis</label>
+                            <AskOrionButton topicId="variable_types" />
+                        </div>
                         <div className="grid grid-cols-2 gap-3">
                             <div>
                                 <label className="text-xs text-muted">Variavel principal</label>
@@ -122,7 +148,10 @@ export function HypothesisTab({ datasetId, filters, continuousColumns, discreteC
             {result && (
                 <div className="glass-card p-6 animate-fadeIn">
                     <div className="flex items-center justify-between mb-4">
-                        <h4 className="font-semibold">{result.test_name}</h4>
+                        <div className="flex items-center gap-2">
+                            <h4 className="font-semibold">{result.test_name}</h4>
+                            <AskOrionButton topicId={TEST_HELP_TOPICS[result.test_type] || 'hypothesis_tests_overview'} />
+                        </div>
                         {result.significant ? (
                             <span className="chip active text-xs flex items-center gap-1"><CheckCircle2 size={12} /> {result.decision}</span>
                         ) : (
@@ -131,10 +160,40 @@ export function HypothesisTab({ datasetId, filters, continuousColumns, discreteC
                     </div>
 
                     <div className="grid grid-cols-4 gap-4 mb-4">
-                        <div className="stat-card"><div className="stat-label">Estatistica</div><div className="stat-value text-lg">{result.statistic.toFixed(2)}</div></div>
-                        <div className="stat-card"><div className="stat-label">p-valor</div><div className={`stat-value text-lg ${result.significant ? 'text-success' : ''}`}>{result.p_value < 0.001 ? '< 0.001' : result.p_value.toFixed(4)}</div></div>
-                        {result.effect_size != null && <div className="stat-card"><div className="stat-label">{result.effect_size_name}</div><div className="stat-value text-lg">{result.effect_size.toFixed(3)}</div></div>}
-                        {result.ci_lower != null && <div className="stat-card"><div className="stat-label">IC 95%</div><div className="stat-value text-lg">[{result.ci_lower.toFixed(2)}, {result.ci_upper?.toFixed(2)}]</div></div>}
+                        <div className="stat-card">
+                            <div className="stat-label flex items-center gap-2">
+                                Estatistica
+                                <AskOrionButton topicId="test_statistic" />
+                            </div>
+                            <div className="stat-value text-lg">{result.statistic.toFixed(2)}</div>
+                        </div>
+                        <div className="stat-card">
+                            <div className="stat-label flex items-center gap-2">
+                                p-valor
+                                <AskOrionButton topicId="p_value" />
+                            </div>
+                            <div className={`stat-value text-lg ${result.significant ? 'text-success' : ''}`}>
+                                {result.p_value < 0.001 ? '< 0.001' : result.p_value.toFixed(4)}
+                            </div>
+                        </div>
+                        {result.effect_size != null && (
+                            <div className="stat-card">
+                                <div className="stat-label flex items-center gap-2">
+                                    {result.effect_size_name}
+                                    <AskOrionButton topicId="effect_size" />
+                                </div>
+                                <div className="stat-value text-lg">{result.effect_size.toFixed(3)}</div>
+                            </div>
+                        )}
+                        {result.ci_lower != null && (
+                            <div className="stat-card">
+                                <div className="stat-label flex items-center gap-2">
+                                    IC 95%
+                                    <AskOrionButton topicId="confidence_interval" />
+                                </div>
+                                <div className="stat-value text-lg">[{result.ci_lower.toFixed(2)}, {result.ci_upper?.toFixed(2)}]</div>
+                            </div>
+                        )}
                     </div>
 
                     <p className="text-sm text-secondary">{result.interpretation}</p>

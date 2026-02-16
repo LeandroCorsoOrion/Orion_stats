@@ -1,5 +1,5 @@
 """
-Orion Stats - Crosstab Service
+Orion Analytics - Crosstab Service
 Calculates cross-tabulation with chi-square test.
 """
 import math

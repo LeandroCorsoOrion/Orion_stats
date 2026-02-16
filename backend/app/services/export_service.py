@@ -1,5 +1,5 @@
 """
-Orion Stats - Export Service
+Orion Analytics - Export Service
 Generates Excel exports with multiple sheets.
 """
 import io
@@ -1000,7 +1000,16 @@ def create_excel_export(
     # Sheet 7: Comparison tests
     if "comparison" in include_sheets and tests:
         ws = _sheet("Testes Comparativos")
-        headers = ["Variavel", "Teste", "Estatistica", "p-valor", "Significativo", "Tamanho Efeito", "Interpretacao"]
+        headers = [
+            "Variavel",
+            "Teste",
+            "Estatistica",
+            "p-valor",
+            "Significativo",
+            "Tamanho Efeito",
+            "Interpretacao",
+            "Explicacao Pratica",
+        ]
         for col_idx, h in enumerate(headers, 1):
             ws.cell(row=1, column=col_idx, value=h)
         _style_header(ws, 1, len(headers))
@@ -1010,8 +1019,9 @@ def create_excel_export(
                 test.variable_name, test.test_name_display,
                 test.statistic, test.p_value,
                 "Sim" if test.significant else "Nao",
-                f"{test.effect_size_name} = {test.effect_size}" if test.effect_size else "-",
+                f"{test.effect_size_name} = {test.effect_size}" if test.effect_size is not None else "-",
                 test.interpretation,
+                test.practical_explanation or "-",
             ]
             for col_idx, v in enumerate(values, 1):
                 cell = ws.cell(row=row_idx, column=col_idx, value=v)

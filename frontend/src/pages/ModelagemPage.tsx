@@ -1,13 +1,16 @@
-// Orion Stats - Modeling Page
+// Orion Analytics - Modeling Page
 
-import { useState } from 'react';
-import { BrainCircuit, Loader2, Play, Trophy, AlertCircle, Calculator, ArrowRight, Database, Info, PlusCircle } from 'lucide-react';
-import { trainModels, predict } from '@/lib/api';
+import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { BrainCircuit, Loader2, Play, Trophy, AlertCircle, Calculator, ArrowRight, Database, Info, PlusCircle, Rocket } from 'lucide-react';
+import { createProject, trainModels, predict } from '@/lib/api';
 import { useApp } from '@/lib/context';
-import type { MLPredictResponse, ModelMetrics, LinearCoefficient } from '@/types';
+import { AskOrionButton } from '@/components/AskOrionButton';
+import type { FilterCondition, MLPredictResponse, ModelMetrics, LinearCoefficient } from '@/types';
 import { buildMLSection } from '@/lib/reportSections';
 
 export function ModelagemPage() {
+    const navigate = useNavigate();
     const {
         currentDataset, filters,
         target, setTarget,
@@ -26,6 +29,28 @@ export function ModelagemPage() {
     const [prediction, setPrediction] = useState<MLPredictResponse | null>(null);
     const [selectedModel, setSelectedModel] = useState<string | null>(null);
     const [sectionAdded, setSectionAdded] = useState(false);
+
+    // Project (Operationalization)
+    const [projectName, setProjectName] = useState('');
+    const [projectDescription, setProjectDescription] = useState('');
+    const [creatingProject, setCreatingProject] = useState(false);
+    const [projectError, setProjectError] = useState<string | null>(null);
+
+    type TrainedSnapshot = {
+        target: string;
+        features: string[];
+        filters: FilterCondition[];
+        selection_metric: 'r2' | 'rmse' | 'mae';
+        treat_missing_as_zero: boolean;
+    };
+    const [trainedSnapshot, setTrainedSnapshot] = useState<TrainedSnapshot | null>(null);
+
+    const targetLabel = useMemo(() => {
+        const col = currentDataset?.columns.find((c) => c.col_key === target);
+        return col?.name || target;
+    }, [currentDataset, target]);
+
+    const activeFeatures = mlResult && trainedSnapshot ? trainedSnapshot.features : features;
 
     const numericColumns = currentDataset?.columns.filter(
         (c) => c.var_type === 'continuous' || c.var_type === 'discrete'
@@ -63,6 +88,15 @@ export function ModelagemPage() {
             });
             setMlResult(response);
             setSelectedModel(response.best_model_label);
+            setTrainedSnapshot({
+                target,
+                features,
+                filters,
+                selection_metric: selectionMetric,
+                treat_missing_as_zero: treatMissingAsZero,
+            });
+            setProjectError(null);
+            setProjectName((prev) => prev || `${currentDataset.name} - ${targetLabel}`.slice(0, 255));
 
             // Initialize input values
             const initialValues: Record<string, string> = {};
@@ -76,6 +110,49 @@ export function ModelagemPage() {
             setError(err.response?.data?.detail || 'Erro ao treinar modelos');
         } finally {
             setLoading(false);
+        }
+    }
+
+    async function handleCreateProject() {
+        if (!currentDataset || !mlResult || !target || features.length === 0) {
+            setProjectError('Treine um modelo antes de transformar em projeto.');
+            return;
+        }
+        if (!trainedSnapshot) {
+            setProjectError('Treino não encontrado. Treine novamente e tente criar o projeto.');
+            return;
+        }
+        if (!projectName.trim()) {
+            setProjectError('Dê um nome ao projeto.');
+            return;
+        }
+
+        setCreatingProject(true);
+        setProjectError(null);
+
+        try {
+            const created = await createProject({
+                name: projectName.trim(),
+                description: projectDescription?.trim() || undefined,
+                dataset_id: currentDataset.id,
+                model_id: mlResult.model_id,
+                model_label: selectedModel || mlResult.best_model_label,
+                target: trainedSnapshot.target,
+                features: trainedSnapshot.features,
+                train_config: {
+                    filters: trainedSnapshot.filters,
+                    selection_metric: trainedSnapshot.selection_metric,
+                    treat_missing_as_zero: trainedSnapshot.treat_missing_as_zero,
+                },
+                status: 'active',
+            });
+
+            navigate(`/projetos/${created.id}`);
+        } catch (e: unknown) {
+            const err = e as { response?: { data?: { detail?: string } } };
+            setProjectError(err.response?.data?.detail || 'Erro ao criar projeto');
+        } finally {
+            setCreatingProject(false);
         }
     }
 
@@ -114,7 +191,7 @@ export function ModelagemPage() {
         try {
             // Convert input values to appropriate types
             const values: Record<string, unknown> = {};
-            features.forEach((f) => {
+            activeFeatures.forEach((f) => {
                 const col = currentDataset?.columns.find((c) => c.col_key === f);
                 const val = inputValues[f];
 
@@ -150,7 +227,10 @@ export function ModelagemPage() {
 
     return (
         <div className="animate-fadeIn">
-            <h2 className="section-title mb-6">Modelagem e Simulação</h2>
+            <div className="flex items-center justify-between mb-6">
+                <h2 className="section-title">Modelagem e Simulação</h2>
+                <AskOrionButton topicId="ml_overview" />
+            </div>
 
             <div className="grid gap-6" style={{ gridTemplateColumns: '320px 1fr' }}>
                 {/* Left Panel - Configuration */}
@@ -211,7 +291,10 @@ export function ModelagemPage() {
 
                     {/* Metric Selection */}
                     <div className="glass-card p-4">
-                        <h3 className="font-semibold mb-3">Métrica de Seleção</h3>
+                        <h3 className="font-semibold mb-3 flex items-center gap-2">
+                            Métrica de Seleção
+                            <AskOrionButton topicId="metric_selection" />
+                        </h3>
                         <div className="flex gap-2">
                             {(['rmse', 'r2', 'mae'] as const).map((m) => (
                                 <button
@@ -263,6 +346,7 @@ export function ModelagemPage() {
                                     <h3 className="font-semibold text-lg flex items-center gap-2">
                                         <Trophy className="text-warning" size={20} />
                                         Comparativo de Modelos
+                                        <AskOrionButton topicId="metric_selection" />
                                     </h3>
                                     <button className="btn btn-secondary text-sm" onClick={addMlToReport}>
                                         <PlusCircle size={14} />
@@ -305,11 +389,67 @@ export function ModelagemPage() {
                                 </div>
                             </div>
 
+                            {/* Operational Project */}
+                            <div className="glass-card p-6">
+                                <div className="flex items-center justify-between gap-3 mb-4">
+                                    <h3 className="font-semibold text-lg flex items-center gap-2">
+                                        <Rocket size={20} />
+                                        Transformar em Projeto
+                                        <AskOrionButton topicId="projects_overview" />
+                                    </h3>
+                                    <div className="text-xs text-muted">
+                                        Modelo: <span className="text-secondary">{selectedModel || mlResult.best_model_label}</span>
+                                    </div>
+                                </div>
+
+                                <p className="text-secondary text-sm mb-4">
+                                    Um projeto salva o treino e cria um fluxo operacional com inputs prontos e endpoint de previsão.
+                                    As <b>features (X)</b> viram os campos do formulário e do payload da API.
+                                </p>
+
+                                <div className="grid grid-cols-2 gap-4 mb-4">
+                                    <div>
+                                        <label className="label">Nome do Projeto</label>
+                                        <input
+                                            className="input"
+                                            value={projectName}
+                                            onChange={(e) => setProjectName(e.target.value)}
+                                            placeholder="Ex: Previsão de Rendimento Metalúrgico"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="label">Descrição (opcional)</label>
+                                        <input
+                                            className="input"
+                                            value={projectDescription}
+                                            onChange={(e) => setProjectDescription(e.target.value)}
+                                            placeholder="Ex: Modelo para apoiar decisões de processo"
+                                        />
+                                    </div>
+                                </div>
+
+                                {projectError && (
+                                    <div className="p-3 rounded-lg bg-[rgba(248,113,113,0.1)] border border-[rgba(248,113,113,0.3)] mb-4">
+                                        <span className="text-error text-sm">{projectError}</span>
+                                    </div>
+                                )}
+
+                                <button
+                                    className="btn btn-primary"
+                                    onClick={handleCreateProject}
+                                    disabled={creatingProject}
+                                >
+                                    {creatingProject ? <Loader2 size={16} className="animate-spin" /> : <Rocket size={16} />}
+                                    Transformar em Projeto
+                                </button>
+                            </div>
+
                             {/* Linear Regression */}
                             <div className="glass-card p-6">
                                 <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
                                     <Calculator size={20} />
                                     Regressão Linear
+                                    <AskOrionButton topicId="linear_regression_overview" />
                                 </h3>
 
                                 <div className="bg-[rgba(13,20,33,0.6)] p-4 rounded-lg mb-4 overflow-x-auto">
@@ -320,11 +460,17 @@ export function ModelagemPage() {
 
                                 <div className="grid grid-cols-2 gap-4 mb-4">
                                     <div className="stat-card">
-                                        <div className="stat-label">R²</div>
+                                        <div className="stat-label flex items-center gap-2">
+                                            R²
+                                            <AskOrionButton topicId="r2" />
+                                        </div>
                                         <div className="stat-value text-xl">{mlResult.linear_regression.r2.toFixed(4)}</div>
                                     </div>
                                     <div className="stat-card">
-                                        <div className="stat-label">RMSE</div>
+                                        <div className="stat-label flex items-center gap-2">
+                                            RMSE
+                                            <AskOrionButton topicId="rmse" />
+                                        </div>
                                         <div className="stat-value text-xl">{mlResult.linear_regression.rmse.toFixed(4)}</div>
                                     </div>
                                 </div>
@@ -334,16 +480,46 @@ export function ModelagemPage() {
                                         <table className="table text-sm">
                                             <thead>
                                                 <tr>
-                                                    <th>Variável</th>
-                                                    <th>Coeficiente</th>
-                                                    <th>Erro Padrão</th>
-                                                    <th>t-valor</th>
-                                                    <th>p-valor</th>
+                                                    <th>
+                                                        <span className="inline-flex items-center gap-2">
+                                                            Variável
+                                                            <AskOrionButton topicId="features_x" />
+                                                        </span>
+                                                    </th>
+                                                    <th>
+                                                        <span className="inline-flex items-center gap-2">
+                                                            Coeficiente
+                                                            <AskOrionButton topicId="regression_coefficient" />
+                                                        </span>
+                                                    </th>
+                                                    <th>
+                                                        <span className="inline-flex items-center gap-2">
+                                                            Erro Padrão
+                                                            <AskOrionButton topicId="regression_standard_error" />
+                                                        </span>
+                                                    </th>
+                                                    <th>
+                                                        <span className="inline-flex items-center gap-2">
+                                                            t-valor
+                                                            <AskOrionButton topicId="t_value" />
+                                                        </span>
+                                                    </th>
+                                                    <th>
+                                                        <span className="inline-flex items-center gap-2">
+                                                            p-valor
+                                                            <AskOrionButton topicId="p_value" />
+                                                        </span>
+                                                    </th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 <tr>
-                                                    <td className="font-medium">Intercepto</td>
+                                                    <td className="font-medium">
+                                                        <span className="inline-flex items-center gap-2">
+                                                            Intercepto
+                                                            <AskOrionButton topicId="regression_intercept" />
+                                                        </span>
+                                                    </td>
                                                     <td>{mlResult.linear_regression.intercept.toFixed(4)}</td>
                                                     <td>-</td>
                                                     <td>-</td>
@@ -381,7 +557,7 @@ export function ModelagemPage() {
                                 </h3>
 
                                 <div className="grid grid-cols-3 gap-4 mb-4">
-                                    {features.map((f) => {
+                                    {activeFeatures.map((f) => {
                                         const col = currentDataset?.columns.find((c) => c.col_key === f);
                                         const isCategorical = col?.var_type === 'categorical';
                                         const categories = mlResult.categorical_features[f];
@@ -429,8 +605,9 @@ export function ModelagemPage() {
                                             <div className="stat-card px-6">
                                                 <div className="stat-label">Valor Previsto</div>
                                                 <div className="stat-value text-2xl">{prediction.predicted_value.toFixed(4)}</div>
-                                                <div className="text-xs text-muted mt-1">
+                                                <div className="text-xs text-muted mt-1 flex items-center gap-2">
                                                     Erro esperado: ±{prediction.expected_error.toFixed(4)}
+                                                    <AskOrionButton topicId="rmse" />
                                                 </div>
                                             </div>
                                             <div className="text-sm text-secondary">

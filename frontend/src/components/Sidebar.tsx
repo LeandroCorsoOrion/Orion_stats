@@ -1,4 +1,4 @@
-// Orion Stats - Sidebar Component
+// Orion Analytics - Sidebar Component
 
 import { NavLink } from 'react-router-dom';
 import {
@@ -6,7 +6,8 @@ import {
     BarChart3,
     GitBranch,
     BrainCircuit,
-    FolderKanban
+    FolderKanban,
+    Rocket
 } from 'lucide-react';
 
 const navItems = [
@@ -14,6 +15,7 @@ const navItems = [
     { path: '/estatisticas', icon: BarChart3, label: 'Estatísticas' },
     { path: '/correlacao', icon: GitBranch, label: 'Correlação' },
     { path: '/modelagem', icon: BrainCircuit, label: 'Modelagem e Simulação' },
+    { path: '/projetos', icon: Rocket, label: 'Projetos' },
     { path: '/cenarios', icon: FolderKanban, label: 'Cenários' },
 ];
 

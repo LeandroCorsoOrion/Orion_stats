@@ -1,5 +1,5 @@
 """
-Orion Stats - Machine Learning API Endpoints
+Orion Analytics - Machine Learning API Endpoints
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -91,6 +91,8 @@ def train_ml_models(request: MLTrainRequest, db: Session = Depends(get_db)):
             'categorical_features': categorical_values,
             'best_label': best_label,
             'selection_metric': request.selection_metric,
+            'treat_missing_as_zero': request.treat_missing_as_zero,
+            'filters': [f.model_dump() for f in (request.filters or [])],
             'model_metrics': {m.label: {'r2': m.r2, 'rmse': m.rmse, 'mae': m.mae, 'mape': m.mape} for m in model_metrics}
         }
         

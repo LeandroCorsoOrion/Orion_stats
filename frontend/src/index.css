@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* Orion Stats Design System */
+/* Orion Analytics Design System */
 
 /* Custom CSS Variables */
 :root {
@@ -472,6 +472,13 @@ body {
   gap: 10px;
 }
 
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
 .topbar-title {
   font-size: 14px;
   font-weight: 600;
@@ -489,6 +496,40 @@ body {
   color: var(--color-primary);
   background: rgba(160, 208, 255, 0.1);
   border-radius: 8px;
+}
+
+.topbar-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: rgba(13, 20, 33, 0.55);
+  cursor: pointer;
+  transition: all var(--transition-normal);
+}
+
+.topbar-status.checking {
+  color: var(--color-warning);
+  border-color: rgba(251, 191, 36, 0.25);
+}
+
+.topbar-status.online {
+  color: var(--color-success);
+  border-color: rgba(74, 222, 128, 0.25);
+}
+
+.topbar-status.offline {
+  color: var(--color-error);
+  border-color: rgba(248, 113, 113, 0.25);
+}
+
+.topbar-status:hover {
+  transform: translateY(-1px);
+  background: rgba(23, 35, 61, 0.8);
 }
 
 .orion-wordmark {
@@ -647,4 +688,17 @@ body {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+@media (max-width: 960px) {
+  .topbar {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .topbar-right {
+    width: 100%;
+    justify-content: space-between;
+    margin-left: 0;
+  }
 }

@@ -1,5 +1,5 @@
 """
-Orion Stats - Dataset API Endpoints
+Orion Analytics - Dataset API Endpoints
 """
 import os
 import shutil
@@ -24,7 +24,12 @@ router = APIRouter(prefix="/datasets", tags=["Datasets"])
 
 def get_client_info(request: Request) -> tuple[str, str]:
     """Extract client IP and user from request."""
-    ip = request.client.host if request.client else "unknown"
+    # When behind a reverse proxy (ex: Nginx on EC2), prefer X-Forwarded-For.
+    xff = request.headers.get("X-Forwarded-For", "")
+    if xff:
+        ip = xff.split(",")[0].strip() or "unknown"
+    else:
+        ip = request.client.host if request.client else "unknown"
     # Get user from header or query param (can be extended for auth)
     user = request.headers.get("X-User", request.query_params.get("user", "anonymous"))
     return ip, user

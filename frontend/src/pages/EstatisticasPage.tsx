@@ -1,10 +1,11 @@
-// Orion Stats - Statistics Page (Full Evolution)
+// Orion Analytics - Statistics Page (Full Evolution)
 
 import { useState, useEffect, useRef } from 'react';
 import { BarChart3, Download, Loader2, X, FileSpreadsheet, FileText, Save, Play, Trash2, PlusCircle } from 'lucide-react';
 import { getDescriptiveStats, getUniqueValues, getChartData, exportStatsExcel, exportStatsWord } from '@/lib/api';
 import { useApp } from '@/lib/context';
 import { STAT_TOOLTIPS, STAT_PRESETS } from '@/lib/statTooltips';
+import { AskOrionButton } from '@/components/AskOrionButton';
 import type { ColumnStats, StatsResponse, ChartDataResponse, FilterCondition, ReportSection } from '@/types';
 import { buildDescriptiveSection } from '@/lib/reportSections';
 
@@ -539,7 +540,10 @@ export function EstatisticasPage() {
                                 <input type="checkbox" checked={treatMissingAsZero}
                                     onChange={(e) => setTreatMissingAsZero(e.target.checked)}
                                     className="w-5 h-5 accent-[var(--color-primary)]" />
-                                <span className="text-sm">Tratar valores ausentes como 0</span>
+                                <span className="text-sm flex items-center gap-2">
+                                    Tratar valores ausentes como 0
+                                    <AskOrionButton topicId="missing_values" />
+                                </span>
                             </label>
                         </div>
 
@@ -635,7 +639,10 @@ export function EstatisticasPage() {
                         {/* Group By */}
                         <div className="glass-card p-4">
                             <div className="mb-3">
-                                <h3 className="font-semibold">Agrupar Por</h3>
+                                <h3 className="font-semibold flex items-center gap-2">
+                                    Agrupar Por
+                                    <AskOrionButton topicId="group_by" />
+                                </h3>
                                 <p className="text-xs text-muted mt-1">
                                     Subdivide os resultados por categoria. Ex: agrupar por "Cliente" mostra as estatisticas de cada cliente separadamente.
                                 </p>
@@ -647,7 +654,10 @@ export function EstatisticasPage() {
                                     <input type="checkbox" checked={runComparisonTests}
                                         onChange={(e) => setRunComparisonTests(e.target.checked)}
                                         className="w-4 h-4 accent-[var(--color-primary)]" />
-                                    <span className="text-xs">Executar testes comparativos</span>
+                                    <span className="text-xs flex items-center gap-2">
+                                        Executar testes comparativos
+                                        <AskOrionButton topicId="comparison_tests" />
+                                    </span>
                                 </label>
                             )}
 
@@ -659,7 +669,10 @@ export function EstatisticasPage() {
                                         onChange={(e) => setApplyGroupFilters(e.target.checked)}
                                         className="w-4 h-4 accent-[var(--color-primary)]"
                                     />
-                                    <span className="text-xs">Aplicar filtro da coluna agrupada (pode reduzir para 1 grupo)</span>
+                                    <span className="text-xs flex items-center gap-2">
+                                        Aplicar filtro da coluna agrupada (pode reduzir para 1 grupo)
+                                        <AskOrionButton topicId="group_by" />
+                                    </span>
                                 </label>
                             )}
 
@@ -796,11 +809,14 @@ export function EstatisticasPage() {
                                             <thead>
                                                 <tr>
                                                     <th>Variavel</th>
-                                                    {visibleStatKeys.map(k => (
-                                                        <th key={k} title={STAT_TOOLTIPS[k]?.description}>
-                                                            {STAT_TOOLTIPS[k]?.shortLabel || k}
-                                                        </th>
-                                                    ))}
+                                                        {visibleStatKeys.map(k => (
+                                                            <th key={k} title={STAT_TOOLTIPS[k]?.description}>
+                                                                <span className="inline-flex items-center gap-2">
+                                                                    {STAT_TOOLTIPS[k]?.shortLabel || k}
+                                                                    <AskOrionButton topicId={`stat.${k}`} />
+                                                                </span>
+                                                            </th>
+                                                        ))}
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -914,7 +930,10 @@ export function EstatisticasPage() {
                                                                 <th>Variavel</th>
                                                                 {visibleStatKeys.map(k => (
                                                                     <th key={k} title={STAT_TOOLTIPS[k]?.description}>
-                                                                        {STAT_TOOLTIPS[k]?.shortLabel || k}
+                                                                        <span className="inline-flex items-center gap-2">
+                                                                            {STAT_TOOLTIPS[k]?.shortLabel || k}
+                                                                            <AskOrionButton topicId={`stat.${k}`} />
+                                                                        </span>
                                                                     </th>
                                                                 ))}
                                                             </tr>

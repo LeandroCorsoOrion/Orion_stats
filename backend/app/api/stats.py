@@ -1,5 +1,5 @@
 """
-Orion Stats - Statistics API Endpoints
+Orion Analytics - Statistics API Endpoints
 """
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse

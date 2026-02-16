@@ -1,5 +1,5 @@
 """
-Orion Stats - Activity Log API Endpoints
+Orion Analytics - Activity Log API Endpoints
 """
 from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session

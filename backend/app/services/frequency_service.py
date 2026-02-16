@@ -1,5 +1,5 @@
 """
-Orion Stats - Frequency Service
+Orion Analytics - Frequency Service
 Calculates frequency tables for categorical/discrete variables.
 """
 import pandas as pd

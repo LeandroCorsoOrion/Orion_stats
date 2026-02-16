@@ -1,5 +1,5 @@
 """
-Orion Stats - Data Query API Endpoints
+Orion Analytics - Data Query API Endpoints
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session

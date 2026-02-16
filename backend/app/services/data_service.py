@@ -1,5 +1,5 @@
 """
-Orion Stats - Data Service
+Orion Analytics - Data Service
 Handles dataset upload, storage, and querying.
 """
 import re

@@ -1,5 +1,5 @@
 """
-Orion Stats - Hypothesis Test Service
+Orion Analytics - Hypothesis Test Service
 Runs parametric and non-parametric hypothesis tests.
 """
 import math

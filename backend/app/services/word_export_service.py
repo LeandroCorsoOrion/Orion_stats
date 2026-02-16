@@ -1,5 +1,5 @@
 """
-Orion Stats - Word Export Service
+Orion Analytics - Word Export Service
 Generates DOCX executive reports with Orion branding and full statistics.
 """
 import io
@@ -246,6 +246,7 @@ def _build_test_rows(tests) -> list[list[Any]]:
             "Sim" if test.significant else "Nao",
             f"{test.effect_size_name} = {_fmt(test.effect_size)}" if test.effect_size is not None else "-",
             test.interpretation,
+            test.practical_explanation or "-",
         ])
     return rows
 
@@ -367,7 +368,15 @@ def _add_descriptive_composite_block(
         _add_table(document, summary_headers, summary_rows if summary_rows else [["-", "-", "-"]])
 
     if tests:
-        test_headers = ["Variavel", "Teste", "Estatistica", "p-valor", "Significativo", "Tamanho de efeito"]
+        test_headers = [
+            "Variavel",
+            "Teste",
+            "Estatistica",
+            "p-valor",
+            "Significativo",
+            "Tamanho de efeito",
+            "Interpretacao pratica",
+        ]
         test_rows = []
         for test in tests:
             test_rows.append([
@@ -377,6 +386,7 @@ def _add_descriptive_composite_block(
                 _fmt(test.p_value, 6),
                 "Sim" if test.significant else "Nao",
                 f"{test.effect_size_name} = {_fmt(test.effect_size)}" if test.effect_size is not None else "-",
+                test.practical_explanation or "-",
             ])
         _add_table(document, test_headers, test_rows if test_rows else [["-"] * len(test_headers)])
 
@@ -658,7 +668,16 @@ def create_word_export(
 
     if tests:
         _add_section_title(document, "6. Testes Comparativos entre Grupos", level=1)
-        test_headers = ["Variavel", "Teste", "Estatistica", "p-valor", "Significativo", "Tamanho de efeito", "Interpretacao"]
+        test_headers = [
+            "Variavel",
+            "Teste",
+            "Estatistica",
+            "p-valor",
+            "Significativo",
+            "Tamanho de efeito",
+            "Interpretacao",
+            "Interpretacao pratica",
+        ]
         test_rows = _build_test_rows(tests)
         _add_table(document, test_headers, test_rows if test_rows else [["-"] * len(test_headers)])
 

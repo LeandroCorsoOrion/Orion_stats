@@ -1,9 +1,10 @@
-// Orion Stats - Dataset Page (Improved UX)
+// Orion Analytics - Dataset Page (Improved UX)
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Upload, FileSpreadsheet, Loader2, CheckCircle, AlertCircle, Trash2, Database, Columns, Eye, History, Clock, User } from 'lucide-react';
 import { uploadDataset, queryData, getDatasets, deleteDataset, updateColumnType, getDatasetActivityHistory } from '@/lib/api';
 import { useApp } from '@/lib/context';
+import { AskOrionButton } from '@/components/AskOrionButton';
 import type { DatasetMeta, ColumnMeta, ActivityLog } from '@/types';
 
 export function DatasetPage() {
@@ -299,6 +300,12 @@ export function DatasetPage() {
                         {/* Column Info Tab */}
                         {activeTab === 'info' && (
                             <div className="glass-card p-4">
+                                <div className="flex items-center justify-between mb-3">
+                                    <p className="text-xs text-muted">
+                                        Dica: ajustar o <b>Tipo de Variavel</b> melhora estatisticas, filtros e modelagem.
+                                    </p>
+                                    <AskOrionButton topicId="variable_types" />
+                                </div>
                                 <div className="grid grid-cols-3 gap-3 mb-4">
                                     <div className="p-3 rounded-lg bg-[rgba(251,191,36,0.1)] border border-[rgba(251,191,36,0.2)]">
                                         <div className="text-xl font-bold text-warning">
@@ -325,10 +332,22 @@ export function DatasetPage() {
                                         <thead>
                                             <tr>
                                                 <th>Coluna</th>
-                                                <th>Tipo de Dado</th>
-                                                <th>Únicos</th>
-                                                <th>Ausentes</th>
-                                                <th>Tipo de Variável</th>
+                                                <th className="flex items-center gap-2">
+                                                    Tipo de Dado
+                                                    <AskOrionButton topicId="data_type" />
+                                                </th>
+                                                <th className="flex items-center gap-2">
+                                                    Únicos
+                                                    <AskOrionButton topicId="unique_values" />
+                                                </th>
+                                                <th className="flex items-center gap-2">
+                                                    Ausentes
+                                                    <AskOrionButton topicId="missing_values" />
+                                                </th>
+                                                <th className="flex items-center gap-2">
+                                                    Tipo de Variável
+                                                    <AskOrionButton topicId="variable_types" />
+                                                </th>
                                             </tr>
                                         </thead>
                                         <tbody>

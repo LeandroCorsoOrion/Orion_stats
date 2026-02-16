@@ -1,4 +1,4 @@
-// Orion Stats - Layout Component
+// Orion Analytics - Layout Component
 
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';

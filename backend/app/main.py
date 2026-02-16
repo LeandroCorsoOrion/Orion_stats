@@ -1,5 +1,5 @@
 """
-Orion Stats - FastAPI Main Application
+Orion Analytics - FastAPI Main Application
 """
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
@@ -16,6 +16,7 @@ from app.api.correlation import router as correlation_router
 from app.api.ml import router as ml_router
 from app.api.scenarios import router as scenarios_router
 from app.api.activity import router as activity_router
+from app.api.projects import router as projects_router
 
 
 @asynccontextmanager
@@ -36,7 +37,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    description="Data Analysis Platform with Statistics, Correlation, and Machine Learning",
+    description="Data Analysis Platform with Statistics, Correlation, Machine Learning, and Operational Projects",
     lifespan=lifespan
 )
 
@@ -57,6 +58,7 @@ app.include_router(correlation_router)
 app.include_router(ml_router)
 app.include_router(scenarios_router)
 app.include_router(activity_router)
+app.include_router(projects_router)
 
 
 @app.get("/")

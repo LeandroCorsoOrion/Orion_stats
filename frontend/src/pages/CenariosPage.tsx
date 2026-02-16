@@ -1,4 +1,4 @@
-// Orion Stats - Scenarios Page
+// Orion Analytics - Scenarios Page
 
 import { useState, useEffect } from 'react';
 import {
@@ -10,6 +10,7 @@ import {
     duplicateScenario, updateScenario, getScenariosByDataset
 } from '@/lib/api';
 import { useApp } from '@/lib/context';
+import { AskOrionButton } from '@/components/AskOrionButton';
 import type { Scenario } from '@/types';
 
 export function CenariosPage() {
@@ -178,7 +179,10 @@ export function CenariosPage() {
 
     return (
         <div className="animate-fadeIn">
-            <h2 className="section-title mb-6">Cenários Salvos</h2>
+            <div className="flex items-center justify-between mb-6">
+                <h2 className="section-title">Cenários Salvos</h2>
+                <AskOrionButton topicId="scenarios_vs_projects" />
+            </div>
 
             {/* Save New Scenario */}
             {currentDataset && (

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { Bot, X, Send, Sparkles, Zap, Brain, Minimize2, Maximize2 } from 'lucide-react';
+import { HELP_TOPICS, findHelpTopic, type HelpTopic } from '@/lib/helpTopics';
 
 interface Message {
     id: string;
@@ -14,19 +15,30 @@ const INITIAL_MESSAGES: Message[] = [
     {
         id: '1',
         role: 'assistant',
-        content: 'Olá! Eu sou o **Orion.AI**, seu assistente de análise de dados. 🚀\n\nPosso ajudar você com:\n• Interpretação de estatísticas\n• Análise de correlações\n• Dicas sobre modelagem\n• Dúvidas gerais sobre a plataforma\n\nComo posso ajudar?',
-        timestamp: new Date()
-    }
+        content:
+            'Ola! Eu sou o **Orion.AI**, seu assistente dentro do Orion Analytics.\n\n' +
+            'Eu explico (em linguagem simples):\n' +
+            '• o que cada numero significa (media, DP, IC, p-valor, etc.)\n' +
+            '• o que e "significativo" e "nao significativo"\n' +
+            '• qual teste usar (t-test, ANOVA, Qui-quadrado, etc.)\n' +
+            '• como transformar um treino em **Projeto Operacional**\n\n' +
+            'Ex: "o que e p-valor?"',
+        timestamp: new Date(),
+    },
 ];
 
-const QUICK_RESPONSES: Record<string, string> = {
-    'correlação': 'A **correlação de Pearson** mede a relação linear entre duas variáveis.\n\n📊 **Interpretação:**\n• **0.8 a 1.0**: Correlação forte positiva\n• **0.5 a 0.8**: Correlação média positiva\n• **0.0 a 0.5**: Correlação fraca\n• **-0.5 a 0.0**: Correlação fraca negativa\n• **-0.8 a -0.5**: Correlação média negativa\n• **-1.0 a -0.8**: Correlação forte negativa\n\n⚠️ Lembre-se: correlação não implica causalidade!',
-    'r2': 'O **R²** (coeficiente de determinação) indica a % da variância explicada pelo modelo.\n\n📈 **Interpretação:**\n• **> 0.9**: Excelente\n• **0.7 - 0.9**: Bom\n• **0.5 - 0.7**: Moderado\n• **< 0.5**: Pode precisar de mais variáveis\n\nUm R² de 0.85 significa que 85% da variação é explicada pelo modelo.',
-    'rmse': 'O **RMSE** (Root Mean Square Error) mede o erro médio do modelo na mesma unidade da variável alvo.\n\n📉 **Quanto menor, melhor!**\n\nPara interpretar, compare com a média da variável-alvo. Se RMSE é muito menor que a média, o modelo está bom.',
-    'machine learning': 'A plataforma oferece **5 modelos de ML**:\n\n🔵 **Pro**: Alta performance geral\n🟢 **Alpha**: Ótimo para dados graduais\n🟣 **Sigma**: Robusto para grandes datasets\n🟡 **Delta**: Regularização balanceada\n🔴 **Nova**: Captura padrões complexos\n\nTreine todos e compare as métricas para escolher o melhor!',
-    'estatísticas': 'As **estatísticas descritivas** resumem seus dados:\n\n📊 **Medidas de Tendência Central:**\n• Média: valor central típico\n• Mediana: valor do meio\n• Moda: valor mais frequente\n\n📐 **Medidas de Dispersão:**\n• Desvio Padrão: variação típica\n• IQR: distância entre Q1 e Q3\n\nUse filtros para ver por grupos!',
-    'default': 'Entendi sua pergunta! 🤔\n\nPara uma resposta mais precisa, você pode me perguntar sobre:\n• Correlação e interpretação\n• Métricas de ML (R², RMSE, MAE)\n• Estatísticas descritivas\n• Machine Learning\n\nDigite um desses tópicos ou descreva seu problema com mais detalhes!'
-};
+const QUICK_ACTIONS = [
+    { label: 'p-valor', question: 'O que e p-valor?' },
+    { label: 'Significancia', question: 'O que significa "significativo"?' },
+    { label: 'IC 95%', question: 'O que e intervalo de confianca (IC 95%)?' },
+    { label: 'Normalidade', question: 'Como interpretar testes de normalidade?' },
+    { label: 'Qui-quadrado', question: 'Como interpretar o teste qui-quadrado no crosstab?' },
+    { label: 'R²', question: 'O que e R²?' },
+    { label: 'RMSE', question: 'O que e RMSE?' },
+    { label: 'Projetos', question: 'O que e um Projeto Operacional?' },
+];
+
+type AskDetail = { topicId?: string; question?: string; autoSend?: boolean };
 
 export function OrionAI() {
     const [isOpen, setIsOpen] = useState(false);
@@ -40,54 +52,98 @@ export function OrionAI() {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
 
+    function buildTopicResponse(topic: HelpTopic): string {
+        const related = (topic.related || [])
+            .map((id) => HELP_TOPICS.find((t) => t.id === id))
+            .filter(Boolean) as HelpTopic[];
+
+        if (related.length === 0) return topic.body;
+
+        const relatedLine = related
+            .slice(0, 4)
+            .map((t) => t.title)
+            .join(' • ');
+
+        return `${topic.body}\n\n**Veja tambem:** ${relatedLine}`;
+    }
+
     function getResponse(query: string): string {
         const q = query.toLowerCase();
 
-        for (const [keyword, response] of Object.entries(QUICK_RESPONSES)) {
-            if (keyword !== 'default' && q.includes(keyword)) {
-                return response;
-            }
-        }
-
         if (q.includes('ajuda') || q.includes('help')) {
-            return 'Claro! Posso ajudar com:\n\n🔹 **Análise de Dados**: correlações, estatísticas\n🔹 **Machine Learning**: métricas, modelos\n🔹 **Uso da Plataforma**: navegação, funcionalidades\n\nO que você gostaria de saber?';
+            const picks = [
+                'p-valor',
+                'significancia',
+                'intervalo de confianca',
+                'normalidade',
+                'teste t',
+                'anova',
+                'qui-quadrado',
+                'projetos',
+            ];
+            return (
+                '**Posso te guiar por qualquer termo da tela.**\n\n' +
+                'Sugestoes:\n' +
+                picks.map((p) => `• ${p}`).join('\n') +
+                '\n\nEx: "o que e p-valor?"'
+            );
         }
 
         if (q.includes('obrigado') || q.includes('valeu')) {
-            return 'Por nada! 😊 Estou sempre aqui para ajudar. Boa análise! 🚀';
+            return 'De nada. Se quiser, diga qual tela/resultado voce esta vendo e eu explico passo a passo.';
         }
 
-        return QUICK_RESPONSES['default'];
+        const { best, suggestions } = findHelpTopic(query, HELP_TOPICS);
+        if (best) return buildTopicResponse(best);
+
+        const suggestionLine =
+            suggestions.length > 0
+                ? suggestions.map((s) => s.title).join(' • ')
+                : 'p-valor • IC 95% • significancia • normalidade • R² • RMSE';
+
+        return (
+            'Nao entendi totalmente. Tente perguntar assim:\n' +
+            '• "o que e p-valor?"\n' +
+            '• "como interpretar IC 95%?"\n' +
+            '• "qual teste usar para 2 grupos?"\n\n' +
+            `**Sugestoes:** ${suggestionLine}`
+        );
     }
 
-    async function handleSend() {
-        if (!input.trim()) return;
+    async function sendQuery(query: string, forcedTopic?: HelpTopic) {
+        if (!query.trim()) return;
 
         const userMessage: Message = {
             id: Date.now().toString(),
             role: 'user',
-            content: input,
-            timestamp: new Date()
+            content: query,
+            timestamp: new Date(),
         };
 
-        setMessages(prev => [...prev, userMessage]);
-        setInput('');
+        setMessages((prev) => [...prev, userMessage]);
         setIsTyping(true);
 
-        // Simulate typing delay
-        await new Promise(resolve => setTimeout(resolve, 800 + Math.random() * 700));
+        // Small typing delay for readability.
+        await new Promise((resolve) => setTimeout(resolve, 450));
 
-        const response = getResponse(input);
+        const response = forcedTopic ? buildTopicResponse(forcedTopic) : getResponse(query);
 
         const assistantMessage: Message = {
             id: (Date.now() + 1).toString(),
             role: 'assistant',
             content: response,
-            timestamp: new Date()
+            timestamp: new Date(),
         };
 
-        setMessages(prev => [...prev, assistantMessage]);
+        setMessages((prev) => [...prev, assistantMessage]);
         setIsTyping(false);
+    }
+
+    async function handleSend() {
+        if (!input.trim()) return;
+        const q = input;
+        setInput('');
+        await sendQuery(q);
     }
 
     function handleKeyPress(e: React.KeyboardEvent) {
@@ -98,10 +154,31 @@ export function OrionAI() {
     }
 
     function formatMessage(content: string) {
-        return content
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\n/g, '<br/>');
+        return content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br/>');
     }
+
+    useEffect(() => {
+        function onAsk(event: Event) {
+            const e = event as CustomEvent<AskDetail>;
+            const topic = e.detail?.topicId ? HELP_TOPICS.find((t) => t.id === e.detail.topicId) : undefined;
+
+            setIsOpen(true);
+            setIsMinimized(false);
+
+            const question = e.detail?.question || (topic ? `Explique: ${topic.title}` : '');
+            if (!question) return;
+
+            if (e.detail?.autoSend === false) {
+                setInput(question);
+                return;
+            }
+
+            void sendQuery(question, topic);
+        }
+
+        window.addEventListener('orion-ai:ask', onAsk as EventListener);
+        return () => window.removeEventListener('orion-ai:ask', onAsk as EventListener);
+    }, []);
 
     return (
         <>
@@ -116,20 +193,19 @@ export function OrionAI() {
                      hover:shadow-[rgba(160,208,255,0.5)] hover:scale-110
                      transition-all duration-300 group"
                     style={{
-                        animation: 'pulse-glow 2s ease-in-out infinite'
+                        animation: 'pulse-glow 2s ease-in-out infinite',
                     }}
                 >
                     <Bot size={28} className="text-[#0d1421]" />
 
                     {/* Glow ring */}
-                    <div className="absolute inset-0 rounded-full bg-[rgba(160,208,255,0.3)] animate-ping"
-                        style={{ animationDuration: '3s' }} />
+                    <div
+                        className="absolute inset-0 rounded-full bg-[rgba(160,208,255,0.3)] animate-ping"
+                        style={{ animationDuration: '3s' }}
+                    />
 
                     {/* Sparkle decoration */}
-                    <Sparkles
-                        size={14}
-                        className="absolute -top-1 -right-1 text-warning animate-pulse"
-                    />
+                    <Sparkles size={14} className="absolute -top-1 -right-1 text-warning animate-pulse" />
                 </button>
             )}
 
@@ -138,12 +214,9 @@ export function OrionAI() {
                 <div
                     className={`fixed z-50 bg-[#0d1421] border border-[var(--glass-border)] rounded-2xl shadow-2xl
                       transition-all duration-300 flex flex-col overflow-hidden
-                      ${isMinimized
-                            ? 'bottom-6 right-6 w-80 h-14'
-                            : 'bottom-6 right-6 w-96 h-[560px]'
-                        }`}
+                      ${isMinimized ? 'bottom-6 right-6 w-80 h-14' : 'bottom-6 right-6 w-96 h-[560px]'}`}
                     style={{
-                        boxShadow: '0 25px 50px rgba(0,0,0,0.5), 0 0 40px rgba(160,208,255,0.15)'
+                        boxShadow: '0 25px 50px rgba(0,0,0,0.5), 0 0 40px rgba(160,208,255,0.15)',
                     }}
                 >
                     {/* Header */}
@@ -154,12 +227,16 @@ export function OrionAI() {
                     >
                         <div className="flex items-center gap-3">
                             <div className="relative">
-                                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#A0D0FF] to-[#5a9de0] 
-                               flex items-center justify-center">
+                                <div
+                                    className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#A0D0FF] to-[#5a9de0] 
+                               flex items-center justify-center"
+                                >
                                     <Brain size={20} className="text-[#0d1421]" />
                                 </div>
-                                <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-success rounded-full 
-                               border-2 border-[#0d1421]" />
+                                <div
+                                    className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-success rounded-full 
+                               border-2 border-[#0d1421]"
+                                />
                             </div>
                             <div>
                                 <h3 className="font-bold text-sm flex items-center gap-1">
@@ -196,10 +273,11 @@ export function OrionAI() {
                                         className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                                     >
                                         <div
-                                            className={`max-w-[85%] rounded-2xl px-4 py-3 ${msg.role === 'user'
-                                                ? 'bg-gradient-to-r from-[#A0D0FF] to-[#7ab8f5] text-[#0d1421]'
-                                                : 'bg-[var(--color-surface)] border border-[var(--glass-border)]'
-                                                }`}
+                                            className={`max-w-[85%] rounded-2xl px-4 py-3 ${
+                                                msg.role === 'user'
+                                                    ? 'bg-gradient-to-r from-[#A0D0FF] to-[#7ab8f5] text-[#0d1421]'
+                                                    : 'bg-[var(--color-surface)] border border-[var(--glass-border)]'
+                                            }`}
                                         >
                                             {msg.role === 'assistant' && (
                                                 <div className="flex items-center gap-1.5 mb-2">
@@ -217,15 +295,23 @@ export function OrionAI() {
 
                                 {isTyping && (
                                     <div className="flex justify-start">
-                                        <div className="bg-[var(--color-surface)] border border-[var(--glass-border)] 
-                                   rounded-2xl px-4 py-3 flex items-center gap-2">
+                                        <div
+                                            className="bg-[var(--color-surface)] border border-[var(--glass-border)] 
+                                   rounded-2xl px-4 py-3 flex items-center gap-2"
+                                        >
                                             <div className="flex gap-1">
-                                                <span className="w-2 h-2 bg-primary rounded-full animate-bounce"
-                                                    style={{ animationDelay: '0ms' }} />
-                                                <span className="w-2 h-2 bg-primary rounded-full animate-bounce"
-                                                    style={{ animationDelay: '150ms' }} />
-                                                <span className="w-2 h-2 bg-primary rounded-full animate-bounce"
-                                                    style={{ animationDelay: '300ms' }} />
+                                                <span
+                                                    className="w-2 h-2 bg-primary rounded-full animate-bounce"
+                                                    style={{ animationDelay: '0ms' }}
+                                                />
+                                                <span
+                                                    className="w-2 h-2 bg-primary rounded-full animate-bounce"
+                                                    style={{ animationDelay: '150ms' }}
+                                                />
+                                                <span
+                                                    className="w-2 h-2 bg-primary rounded-full animate-bounce"
+                                                    style={{ animationDelay: '300ms' }}
+                                                />
                                             </div>
                                         </div>
                                     </div>
@@ -237,13 +323,13 @@ export function OrionAI() {
                             {/* Quick Actions */}
                             <div className="px-4 py-2 border-t border-[var(--glass-border)]">
                                 <div className="flex gap-2 overflow-x-auto pb-1">
-                                    {['Correlação', 'R²', 'RMSE', 'ML'].map((topic) => (
+                                    {QUICK_ACTIONS.map((item) => (
                                         <button
-                                            key={topic}
-                                            onClick={() => setInput(`O que é ${topic}?`)}
+                                            key={item.label}
+                                            onClick={() => void sendQuery(item.question)}
                                             className="chip text-xs py-1 px-3 whitespace-nowrap hover:bg-[rgba(160,208,255,0.2)]"
                                         >
-                                            {topic}
+                                            {item.label}
                                         </button>
                                     ))}
                                 </div>
@@ -288,3 +374,4 @@ export function OrionAI() {
         </>
     );
 }
+

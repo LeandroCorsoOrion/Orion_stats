@@ -1,5 +1,5 @@
 """
-Orion Stats - Scenario Service
+Orion Analytics - Scenario Service
 Manages saved scenarios.
 """
 from typing import Optional

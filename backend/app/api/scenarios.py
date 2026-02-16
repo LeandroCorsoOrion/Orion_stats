@@ -1,5 +1,5 @@
 """
-Orion Stats - Scenarios API Endpoints
+Orion Analytics - Scenarios API Endpoints
 """
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse

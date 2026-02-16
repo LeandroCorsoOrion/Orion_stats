@@ -1,4 +1,4 @@
-// API Types for Orion Stats
+// API Types for Orion Analytics
 
 // ---------- Column & Dataset Types ----------
 
@@ -118,6 +118,7 @@ export interface GroupComparisonTest {
     effect_size_name?: string;
     effect_size_interpretation?: string;
     interpretation: string;
+    practical_explanation?: string;
     assumptions_met: Record<string, boolean>;
 }
 
@@ -386,6 +387,105 @@ export interface Scenario {
 
 export interface ScenarioList {
     scenarios: Scenario[];
+}
+
+// ---------- Project (Operationalization) Types ----------
+
+export type ProjectStatus = 'draft' | 'active' | 'archived';
+
+export interface ProjectTrainConfig {
+    filters: FilterCondition[];
+    selection_metric: string;
+    treat_missing_as_zero: boolean;
+}
+
+export interface ProjectInputField {
+    col_key: string;
+    name: string;
+    var_type: 'categorical' | 'discrete' | 'continuous' | string;
+    input_type: 'number' | 'select' | string;
+    required?: boolean;
+    default_value?: unknown;
+    allowed_values?: (string | number)[];
+    description?: string;
+}
+
+export interface ProjectCreate {
+    name: string;
+    description?: string;
+    dataset_id: number;
+    model_id: string;
+    model_label?: string;
+    target: string;
+    features: string[];
+    train_config: ProjectTrainConfig;
+    status?: ProjectStatus;
+}
+
+export interface ProjectUpdate {
+    name?: string;
+    description?: string;
+    status?: ProjectStatus;
+}
+
+export interface ProjectSummary {
+    id: number;
+    name: string;
+    dataset_id: number;
+    dataset_name?: string;
+    model_label: string;
+    target: string;
+    status: ProjectStatus;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface Project {
+    id: number;
+    name: string;
+    description?: string;
+    dataset_id: number;
+    dataset_name?: string;
+    model_id: string;
+    model_label: string;
+    target: string;
+    features: string[];
+    input_schema: ProjectInputField[];
+    train_config: ProjectTrainConfig;
+    model_metrics: Record<string, unknown>;
+    status: ProjectStatus;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface ProjectList {
+    projects: ProjectSummary[];
+    total: number;
+}
+
+export interface ProjectPredictRequest {
+    input_values: Record<string, unknown>;
+}
+
+export interface ProjectPredictResponse {
+    predicted_value: number;
+    model_used: string;
+    expected_error: number;
+}
+
+export interface ProjectRun {
+    id: number;
+    project_id: number;
+    input_values: Record<string, unknown>;
+    predicted_value: number;
+    model_used: string;
+    expected_error: number;
+    created_at: string;
+}
+
+export interface ProjectRunList {
+    runs: ProjectRun[];
+    total: number;
 }
 
 // ---------- App State Types ----------

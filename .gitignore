@@ -49,3 +49,8 @@ Thumbs.db
 # Cache
 .cache/
 .parcel-cache/
+
+# Secrets (do not commit)
+secrets/orion_password.txt
+secrets/*.pem
+secrets/*.key

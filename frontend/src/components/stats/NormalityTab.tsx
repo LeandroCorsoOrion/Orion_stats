@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Loader2, Activity, CheckCircle2, XCircle } from 'lucide-react';
 import { getNormality } from '@/lib/api';
+import { AskOrionButton } from '@/components/AskOrionButton';
 import type { NormalityResponse, FilterCondition, ColumnMeta } from '@/types';
 
 interface Props {
@@ -35,10 +36,13 @@ export function NormalityTab({ datasetId, filters, continuousColumns, treatMissi
     return (
         <div>
             <div className="glass-card p-4 mb-4">
-                <h4 className="font-semibold mb-3 flex items-center gap-2">
-                    <Activity size={16} className="text-primary" />
-                    Testes de Normalidade
-                </h4>
+                <div className="flex items-center justify-between mb-3">
+                    <h4 className="font-semibold flex items-center gap-2">
+                        <Activity size={16} className="text-primary" />
+                        Testes de Normalidade
+                    </h4>
+                    <AskOrionButton topicId="normality_tests_overview" />
+                </div>
                 <p className="text-xs text-muted mb-3">Verifica se as variaveis seguem distribuicao normal (Shapiro-Wilk, Kolmogorov-Smirnov, D'Agostino).</p>
                 <div className="flex flex-wrap gap-2 mb-3">
                     {continuousColumns.map(col => (
@@ -73,7 +77,18 @@ export function NormalityTab({ datasetId, filters, continuousColumns, treatMissi
 
                             <div className="table-container mb-2">
                                 <table className="table">
-                                    <thead><tr><th>Teste</th><th>Estatistica</th><th>p-valor</th><th>Resultado</th></tr></thead>
+                                    <thead>
+                                        <tr>
+                                            <th>Teste</th>
+                                            <th className="flex items-center gap-2">
+                                                Estatistica <AskOrionButton topicId="test_statistic" />
+                                            </th>
+                                            <th className="flex items-center gap-2">
+                                                p-valor <AskOrionButton topicId="p_value" />
+                                            </th>
+                                            <th>Resultado</th>
+                                        </tr>
+                                    </thead>
                                     <tbody>
                                         {r.tests.map(t => (
                                             <tr key={t.test_name}>
@@ -91,8 +106,12 @@ export function NormalityTab({ datasetId, filters, continuousColumns, treatMissi
                             </div>
 
                             <div className="flex gap-4 text-xs text-muted">
-                                <span>Assimetria: {r.skewness.toFixed(2)}</span>
-                                <span>Curtose: {r.kurtosis.toFixed(2)}</span>
+                                <span className="flex items-center gap-2">
+                                    Assimetria: {r.skewness.toFixed(2)} <AskOrionButton topicId="stat.skewness" />
+                                </span>
+                                <span className="flex items-center gap-2">
+                                    Curtose: {r.kurtosis.toFixed(2)} <AskOrionButton topicId="stat.kurtosis" />
+                                </span>
                             </div>
                             <p className="text-xs text-secondary mt-1">{r.interpretation}</p>
                         </div>

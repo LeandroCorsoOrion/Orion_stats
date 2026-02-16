@@ -1,9 +1,10 @@
-// Orion Stats - Correlation Page (With Insights)
+// Orion Analytics - Correlation Page (With Insights)
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { TrendingUp, TrendingDown, Loader2, AlertTriangle, ArrowUpRight, ArrowDownRight, Database, Info } from 'lucide-react';
 import { getCorrelation } from '@/lib/api';
 import { useApp } from '@/lib/context';
+import { AskOrionButton } from '@/components/AskOrionButton';
 import Plot from 'react-plotly.js';
 import type Plotly from 'plotly.js';
 
@@ -128,7 +129,10 @@ export function CorrelacaoPage() {
 
     return (
         <div className="animate-fadeIn">
-            <h2 className="section-title mb-6">Correlação de Variáveis</h2>
+            <div className="flex items-center justify-between mb-6">
+                <h2 className="section-title">Correlação de Variáveis</h2>
+                <AskOrionButton topicId="pearson_correlation" />
+            </div>
 
             <div className="grid gap-6" style={{ gridTemplateColumns: '300px 1fr' }}>
                 {/* Left Panel - Variable Selection */}
@@ -297,7 +301,10 @@ export function CorrelacaoPage() {
 
                     {matrix.length > 0 && varNames.length > 0 ? (
                         <div className="glass-card p-6">
-                            <h3 className="font-semibold mb-4">Matriz de Correlação de Pearson</h3>
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="font-semibold">Matriz de Correlação de Pearson</h3>
+                                <AskOrionButton topicId="pearson_correlation" />
+                            </div>
 
                             <Plot
                                 data={[{

@@ -1,17 +1,28 @@
 """
-Orion Stats - Configuration Settings
+Orion Analytics - Configuration Settings
 """
+from pydantic import Field
 from pydantic_settings import BaseSettings
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parents[2]  # backend/
 
 
+def _default_database_url() -> str:
+    analytics_db = BASE_DIR / "orion_analytics.db"
+    legacy_db = BASE_DIR / "orion_stats.db"
+
+    # If the legacy DB exists and the new one does not, keep using legacy to avoid "losing" data
+    # on rename. Users can override via DATABASE_URL any time.
+    db_path = legacy_db if legacy_db.exists() and not analytics_db.exists() else analytics_db
+    return f"sqlite:///{db_path.as_posix()}"
+
+
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
     
     # Application
-    APP_NAME: str = "Orion Stats"
+    APP_NAME: str = "Orion Analytics"
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = False
     
@@ -23,7 +34,7 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list[str] = ["http://localhost:5555", "http://localhost:5173", "http://localhost:3000"]
     
     # Database
-    DATABASE_URL: str = f"sqlite:///{(BASE_DIR / 'orion_stats.db').as_posix()}"
+    DATABASE_URL: str = Field(default_factory=_default_database_url)
     
     # File Storage
     DATA_DIR: Path = BASE_DIR / "data"

@@ -1,0 +1,27 @@
+.git
+.gitignore
+
+# Python
+**/__pycache__/
+**/*.pyc
+.venv/
+venv/
+backend/.venv/
+
+# Node
+**/node_modules/
+**/dist/
+
+# Local data / artifacts (runtime volumes)
+backend/data/
+backend/models/
+*.db
+*.sqlite3
+
+# Secrets (must be mounted at runtime)
+secrets/
+
+# Large files / datasets
+**/*.xlsx
+**/*.xls
+

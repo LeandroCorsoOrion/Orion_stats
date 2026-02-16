@@ -1,5 +1,5 @@
 """
-Orion Stats - Machine Learning Service
+Orion Analytics - Machine Learning Service
 Trains ML models and provides predictions.
 
 MODEL REGISTRY (CONFIDENTIAL - Not exposed in API):
